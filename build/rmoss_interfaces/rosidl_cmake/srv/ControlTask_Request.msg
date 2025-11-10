@@ -1,0 +1,5 @@
+# request constants
+uint8 START = 1
+uint8 STOP = 2
+# request fields
+uint8 cmd

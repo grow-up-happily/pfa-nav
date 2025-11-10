@@ -1,0 +1,1 @@
+/home/yy/sight/pfa-nav/build/pointcloud_to_laserscan/ament_cmake_core/pointcloud_to_laserscanConfig-version.cmake

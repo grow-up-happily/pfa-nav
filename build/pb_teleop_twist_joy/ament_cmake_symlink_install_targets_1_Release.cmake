@@ -1,0 +1,1 @@
+ament_cmake_symlink_install_targets("TARGET_FILES" "/home/yy/sight/pfa-nav/build/pb_teleop_twist_joy/libpb_teleop_twist_joy.so" "TARGETS" "pb_teleop_twist_joy" "ARCHIVE_DESTINATION" "lib" "LIBRARY_DESTINATION" "lib" "RUNTIME_DESTINATION" "bin")

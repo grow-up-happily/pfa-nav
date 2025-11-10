@@ -1,0 +1,1 @@
+/home/yy/sight/pfa-nav/build/rmoss_interfaces/rosidl_typesupport_fastrtps_cpp/rmoss_interfaces/srv/detail/set_mode__rosidl_typesupport_fastrtps_cpp.hpp

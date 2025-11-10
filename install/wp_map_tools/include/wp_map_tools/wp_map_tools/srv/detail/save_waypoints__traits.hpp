@@ -1,0 +1,1 @@
+/home/yy/sight/pfa-nav/build/wp_map_tools/rosidl_generator_cpp/wp_map_tools/srv/detail/save_waypoints__traits.hpp

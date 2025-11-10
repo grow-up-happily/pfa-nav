@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 
+import struct
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
 import serial
 import threading
+import crc8
 
 class VelocitySender(Node):
     def __init__(self):
@@ -13,6 +15,7 @@ class VelocitySender(Node):
         # 串口配置
         self.serial_port = "/dev/ttyUSB0"  # 替换为你的串口路径
         self.baud_rate = 115200
+        self.status_flag = 0
         try:
             self.ser = serial.Serial(self.serial_port, self.baud_rate)
             self.get_logger().info(f"串口连接成功: {self.serial_port}")
@@ -22,9 +25,9 @@ class VelocitySender(Node):
         
         # 订阅速度指令话题
         self.cmd_vel_sub = self.create_subscription(
-            Twist, '/cmd_vel', self.cmd_vel_callback, 10)
+            Twist, '/red_standard_robot1/cmd_vel', self.cmd_vel_callback, 10)
         self.smooth_cmd_vel_sub = self.create_subscription(
-            Twist, '/smooth_cmd_vel', self.cmd_vel_callback, 10)
+            Twist, '/red_standard_robot1/smooth_cmd_vel', self.cmd_vel_callback, 10)
         
         # 启动串口接收线程
         self.receiver_thread = threading.Thread(target=self.serial_receiver)
@@ -39,27 +42,25 @@ class VelocitySender(Node):
         """处理速度指令并发送到串口"""
         if self.ser is None:
             return
-            
-        # 获取x, y线速度
-        x_vel = int(msg.linear.x * 1000)
-        y_vel = int(msg.linear.y * 1000)
-        
-        # 封装成数据包
-        x_sign = '+' if x_vel >= 0 else '-'
-        y_sign = '+' if y_vel >= 0 else '-'
-        
-        x_vel = abs(x_vel)
-        y_vel = abs(y_vel)
-        
-        data_packet = f"S{x_sign}{x_vel:03d}{y_sign}{y_vel:03d}{0}E"
-        
-        # 打印调试信息
-        self.get_logger().info(f"收到平滑速度指令 - vx: {msg.linear.x:.3f}, vy: {msg.linear.y:.3f}")
-        self.get_logger().info(f"发送数据包: {data_packet}")
-        
-        # 发送数据包
+        vx = msg.linear.x  
+        vy = msg.linear.y
+        data_packet = struct.pack('<ffB', vx, vy, self.status_flag)
+
+        crc_engine = crc8.crc8()
+        crc_engine.update(data_packet)
+        crc_byte = crc_engine.digest()[0]  # 获取1字节CRC
+
+        framed_packet = b'S' + data_packet + bytes([crc_byte]) + b'E'
+        self.get_logger().info(f"收到速度指令 - vx: {msg.linear.x:.3f}, vy: {msg.linear.y:.3f}")
+        self.get_logger().info(
+                f"发送数据包: "
+                f"vx={vx:.3f}, vy={vy:.3f}, "
+                f"CRC={crc_byte:02X}, "
+                f"Hex: {framed_packet.hex(' ')}"
+            )
         try:
-            self.ser.write(data_packet.encode())
+            self.ser.write(framed_packet)
+            self.get_logger().info(f"串口已发送: {framed_packet}")
         except Exception as e:
             self.get_logger().error(f"串口发送失败: {e}")
 

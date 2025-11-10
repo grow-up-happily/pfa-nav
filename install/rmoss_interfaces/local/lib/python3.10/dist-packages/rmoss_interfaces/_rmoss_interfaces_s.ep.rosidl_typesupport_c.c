@@ -1,0 +1,1 @@
+/home/yy/sight/pfa-nav/build/rmoss_interfaces/rosidl_generator_py/rmoss_interfaces/_rmoss_interfaces_s.ep.rosidl_typesupport_c.c

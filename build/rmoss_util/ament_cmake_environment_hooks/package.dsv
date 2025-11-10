@@ -1,0 +1,4 @@
+source;share/rmoss_util/local_setup.bash
+source;share/rmoss_util/local_setup.dsv
+source;share/rmoss_util/local_setup.sh
+source;share/rmoss_util/local_setup.zsh

@@ -1,0 +1,1 @@
+/home/yy/sight/pfa-nav/build/rmoss_interfaces/rosidl_generator_c/rmoss_interfaces/srv/detail/control_task__type_support.h

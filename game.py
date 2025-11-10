@@ -2,6 +2,7 @@
 
 # 实车跑图目标点发布，任务接收
 import struct
+import crc8
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
@@ -93,9 +94,19 @@ class GameNode(Node):
         vx = msg.linear.x  
         vy = msg.linear.y
         data_packet = struct.pack('<ffB', vx, vy, self.status_flag)
-        framed_packet = b'S' + data_packet + b'E'
+
+        crc_engine = crc8.crc8()
+        crc_engine.update(data_packet)
+        crc_byte = crc_engine.digest()[0]  # 获取1字节CRC
+
+        framed_packet = b'S' + data_packet + bytes([crc_byte]) + b'E'
         self.get_logger().info(f"收到速度指令 - vx: {msg.linear.x:.3f}, vy: {msg.linear.y:.3f}")
-        self.get_logger().info(f"发送数据包: {framed_packet.hex()}")
+        self.get_logger().info(
+                f"发送数据包: "
+                f"vx={vx:.3f}, vy={vy:.3f}, "
+                f"CRC={crc_byte:02X}, "
+                f"Hex: {framed_packet.hex(' ')}"
+            )
         try:
             self.ser.write(framed_packet)
             self.get_logger().info(f"串口已发送: {framed_packet}")

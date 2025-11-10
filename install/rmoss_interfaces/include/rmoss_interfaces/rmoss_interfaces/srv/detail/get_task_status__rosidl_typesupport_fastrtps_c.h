@@ -1,0 +1,1 @@
+/home/yy/sight/pfa-nav/build/rmoss_interfaces/rosidl_typesupport_fastrtps_c/rmoss_interfaces/srv/detail/get_task_status__rosidl_typesupport_fastrtps_c.h

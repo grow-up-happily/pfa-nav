@@ -1,0 +1,1 @@
+/home/yy/sight/pfa-nav/build/rmoss_interfaces/rosidl_typesupport_introspection_c/rmoss_interfaces/srv/detail/get_mode__rosidl_typesupport_introspection_c.h

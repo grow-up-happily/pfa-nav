@@ -1,0 +1,1 @@
+/home/yy/sight/pfa-nav/build/rmoss_interfaces/rosidl_typesupport_introspection_cpp/rmoss_interfaces/srv/detail/exchange_ammon__rosidl_typesupport_introspection_cpp.hpp

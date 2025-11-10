@@ -1,0 +1,1 @@
+/home/yy/sight/pfa-nav/build/rmoss_gz_plugins/ament_cmake_core/rmoss_gz_pluginsConfig-version.cmake

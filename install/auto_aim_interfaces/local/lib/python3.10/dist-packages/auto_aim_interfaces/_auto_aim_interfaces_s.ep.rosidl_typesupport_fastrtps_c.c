@@ -1,0 +1,1 @@
+/home/yy/sight/pfa-nav/build/auto_aim_interfaces/rosidl_generator_py/auto_aim_interfaces/_auto_aim_interfaces_s.ep.rosidl_typesupport_fastrtps_c.c

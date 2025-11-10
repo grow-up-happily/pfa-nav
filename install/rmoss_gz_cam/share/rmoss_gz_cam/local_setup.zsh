@@ -1,0 +1,1 @@
+/home/yy/sight/pfa-nav/build/rmoss_gz_cam/ament_cmake_environment_hooks/local_setup.zsh

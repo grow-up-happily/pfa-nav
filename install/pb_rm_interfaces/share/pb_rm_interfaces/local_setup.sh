@@ -1,0 +1,1 @@
+/home/yy/sight/pfa-nav/build/pb_rm_interfaces/ament_cmake_environment_hooks/local_setup.sh

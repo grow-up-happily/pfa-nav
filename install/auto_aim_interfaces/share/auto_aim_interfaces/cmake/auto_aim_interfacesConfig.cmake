@@ -1,0 +1,1 @@
+/home/yy/sight/pfa-nav/build/auto_aim_interfaces/ament_cmake_core/auto_aim_interfacesConfig.cmake

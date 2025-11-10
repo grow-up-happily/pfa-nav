@@ -1,0 +1,1 @@
+/home/yy/sight/pfa-nav/build/auto_aim_interfaces/rosidl_generator_c/auto_aim_interfaces/msg/detail/target__type_support.h

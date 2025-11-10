@@ -1,0 +1,3 @@
+
+# response constants
+bool success

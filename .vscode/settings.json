@@ -1,4 +1,4 @@
 {
-    "cmake.sourceDirectory": "/home/yy/sight/pb2025/pb2025_robot_description",
+    "cmake.sourceDirectory": "/home/yy/sight/pfa-nav/pb2025_robot_description",
     "git.ignoreLimitWarning": true
 }

@@ -1,0 +1,1 @@
+/home/yy/sight/pfa-nav/build/rmoss_interfaces/ament_cmake_core/rmoss_interfacesConfig.cmake

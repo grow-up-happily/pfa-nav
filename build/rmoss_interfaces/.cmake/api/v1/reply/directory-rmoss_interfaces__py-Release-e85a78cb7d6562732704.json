@@ -1,0 +1,14 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : [],
+		"nodes" : []
+	},
+	"installers" : [],
+	"paths" : 
+	{
+		"build" : "rmoss_interfaces__py",
+		"source" : "/home/yy/sight/pfa-nav/build/rmoss_interfaces/rmoss_interfaces__py"
+	}
+}

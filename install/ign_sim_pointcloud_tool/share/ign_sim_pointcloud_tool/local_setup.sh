@@ -1,0 +1,1 @@
+/home/yy/sight/pfa-nav/build/ign_sim_pointcloud_tool/ament_cmake_environment_hooks/local_setup.sh

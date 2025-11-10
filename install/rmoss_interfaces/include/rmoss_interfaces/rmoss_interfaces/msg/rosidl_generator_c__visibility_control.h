@@ -1,0 +1,1 @@
+/home/yy/sight/pfa-nav/build/rmoss_interfaces/rosidl_generator_c/rmoss_interfaces/msg/rosidl_generator_c__visibility_control.h
