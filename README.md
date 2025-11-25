@@ -239,5 +239,12 @@ ros2 bag play /path/to/save/directory/livox_data --rate 1.5
  # 测试bag：
  ros2 launch pb2025_nav_bringup rm_navigation_simulation_launch.py world:=game slam:=False use_sim_time:=True
 
-ros2 bag play bag/bag_0.db3 --clock
+ros2 bag play bag/bag_0.db3 --clock  
+
+
+![alt text](images/image4.png)
+
+遇到这种情况，去进程找gazebo-server残留kill -9 进程号。再试一次就可以。
+
 # pfa-nav
+

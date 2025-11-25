@@ -455,7 +455,7 @@ bool OmniPidPursuitController::isCollisionDetected(const nav_msgs::msg::Path & p
     const auto & pose = pose_stamped.pose;
     unsigned int mx, my;
     if (costmap->worldToMap(pose.position.x, pose.position.y, mx, my)) {
-      if (costmap->getCost(mx, my) >= nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE) {
+      if (costmap->getCost(mx, my) >= nav2_costmap_2d::LETHAL_OBSTACLE) {
         return true;
       }
     } else {
