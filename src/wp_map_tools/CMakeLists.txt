@@ -59,6 +59,7 @@ rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typ
 # 库
 set(wp_map_plugins_headers_to_moc
   include/wp_map_tools/add_waypoint_tool.hpp
+  include/wp_map_tools/hero_base_pose_tool.hpp
 )
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
@@ -72,7 +73,9 @@ set(library_name wp_map_plugins)
 
 add_library(${library_name} SHARED
   include/wp_map_tools/add_waypoint_tool.hpp
+  include/wp_map_tools/hero_base_pose_tool.hpp
   src/add_waypoint_tool.cpp
+  src/hero_base_pose_tool.cpp
   ${wp_map_plugins_headers_to_moc}
 )
 

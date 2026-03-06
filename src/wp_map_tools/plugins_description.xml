@@ -6,4 +6,11 @@
       Tool for adding waypoints on the ground plane in rviz.
     </description>
   </class>
+  <class name="wp_map_tools/HeroBasePoseTool"
+         type="wp_map_tools::HeroBasePoseTool"
+         base_class_type="rviz_common::Tool">
+    <description>
+      Tool for setting hero_lidar base pose without triggering Nav2 goals.
+    </description>
+  </class>
 </library>
