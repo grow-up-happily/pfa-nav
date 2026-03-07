@@ -158,7 +158,7 @@ fake_vel_transform:
     input_cmd_vel_topic: "cmd_vel_nav2_result"
     output_cmd_vel_topic: "cmd_vel"
     cmd_spin_topic: "cmd_spin"
-    init_spin_speed: 0.0
+    init_spin_speed: 3.14
 
 small_gicp_relocalization:
   ros__parameters:
@@ -181,15 +181,15 @@ pointcloud_to_laserscan:
   ros__parameters:
     use_sim_time: True
     target_frame: base_footprint
-    min_height: -0.5
-    max_height: 6.0
+    min_height: -1.5                        # 匹配 terrain_analysis_ext 的 lowerBoundZ，不做二次过滤
+    max_height: 2.0                         # 匹配 terrain 的 max_obstacle_height，保留所有障碍点
     min_intensity: 0.1
     max_intensity: 2.0
-    angle_min: -3.1415926                   # -M_PI/2
-    angle_max: 3.1415926                    # M_PI/2
-    angle_increment: 0.00872665             # M_PI/360.0
+    angle_min: -3.1415926                   # -M_PI
+    angle_max: 3.1415926                    # M_PI
+    angle_increment: 0.00436332             # M_PI/720.0 = 0.25度
     scan_time: 0.05
-    range_min: 0.3
+    range_min: 0.1
     range_max: 10.0
     use_inf: true
 
