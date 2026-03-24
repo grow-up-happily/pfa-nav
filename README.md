@@ -258,7 +258,8 @@ ros2 run rqt_tf_tree rqt_tf_tree --ros-args -r /tf:=tf -r /tf_static:=tf_static 
 
 rviz不能连接 x11 dispaly显示
 
-  pkill -9 rviz2
+  xdpyinfo -display :1 >/dev/null && echo OK || echo BAD
+  用这个命令查看，关闭qq试一下
 
 # pfa-nav
 

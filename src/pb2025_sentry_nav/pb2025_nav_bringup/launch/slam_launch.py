@@ -203,18 +203,6 @@ def generate_launch_description():
         arguments=["--ros-args", "--log-level", log_level],
     )
 
-    # Add fake_vel_transform node for velocity transformation
-    start_fake_vel_transform_node = Node(
-        package="fake_vel_transform",
-        executable="fake_vel_transform_node",
-        name="fake_vel_transform",
-        output="screen",
-        respawn=use_respawn,
-        respawn_delay=2.0,
-        parameters=[configured_params],
-        arguments=["--ros-args", "--log-level", log_level],
-    )
-
     ld = LaunchDescription()
 
     # Declare the launch options
@@ -237,6 +225,5 @@ def generate_launch_description():
     # Add localization-related nodes needed in SLAM mode
     ld.add_action(start_loam_interface_node)
     ld.add_action(start_sensor_scan_generation_node)
-    ld.add_action(start_fake_vel_transform_node)
 
     return ld
