@@ -50,8 +50,8 @@ robots:
   rmuc_2025:
     - name: "red_standard_robot1"
       color: "red"
-      x_pose: "3.4"
-      y_pose: "9.5"
+      x_pose: "4.4"
+      y_pose: "8.0"
       z_pose: "0.28"
       yaw: "0.0"
 

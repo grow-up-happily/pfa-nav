@@ -141,8 +141,8 @@ terrain_analysis_ext:
     voxelPointUpdateThre: 100
     voxelTimeUpdateThre: 2.0
     lowerBoundZ: -1.5
-    upperBoundZ: 0.5
-    disRatioZ: 0.2
+    upperBoundZ: 0.35
+    disRatioZ: 0.1
     checkTerrainConn: False
     terrainUnderVehicle: -0.75
     terrainConnThre: 0.5
@@ -218,15 +218,15 @@ slam_toolbox:
     # map_start_at_dock: true
 
     debug_logging: false
-    throttle_scans: 1
-    scan_queue_size: 10
+    throttle_scans: 2
+    scan_queue_size: 1
     transform_publish_period: 0.0                # if 0 never publishes odometry
     map_update_interval: 0.2                    # align with scan admission interval so map refresh keeps up
-    resolution: 0.05
+    resolution: 0.08                             # 稀疏 scan 时用更粗的栅格提高建图稳定性
     min_laser_range: 0.3                         # for rastering images
-    max_laser_range: 10.0                         # for rastering images
-    min_pass_through: 2                         # allow a cell to be classified after the first beam passes it
-    occupancy_threshold: 0.04                    # 1 hit -> occupied (1/2), then 1 extra pass -> free (1/3) in Karto's current ray-counting model
+    max_laser_range: 10.0                         # 与前端 scan 量程保持一致，减少远处稀疏点干扰
+    min_pass_through: 3                         # start classifying a cell earlier so low obstacles enter the map with fewer repeats
+    occupancy_threshold: 0.015                    #越小越容易识别障碍越不容易删除 1 hit -> occupied (1/2), then 1 extra pass -> free (1/3) in Karto's current ray-counting model
     minimum_time_interval: 0.2
     transform_timeout: 0.2
     tf_buffer_duration: 10.
@@ -236,7 +236,7 @@ slam_toolbox:
     # General Parameters
     use_scan_matching: false
     use_scan_barycenter: true
-    minimum_travel_distance: 0.0                # allow stationary / in-place rotation scans to enter the map
+    minimum_travel_distance: 0.03                # allow stationary / in-place rotation scans to enter the map
     minimum_travel_heading: 0.1
     scan_buffer_size: 10
     scan_buffer_maximum_scan_distance: 10.0
@@ -356,7 +356,7 @@ controller_server:
       translation_kp: 3.0
       translation_ki: 0.1
       translation_kd: 0.3
-      enable_rotation: true
+      enable_rotation: false
       rotation_kp: 3.0
       rotation_ki: 0.1
       rotation_kd: 0.3
@@ -364,7 +364,7 @@ controller_server:
       min_max_sum_error: 1.0
       lookahead_dist: 2.0
       use_velocity_scaled_lookahead_dist: true
-      lookahead_time: 1.0
+      lookahead_time: 0.5
       min_lookahead_dist: 0.5
       max_lookahead_dist: 1.0
       use_interpolation: false
@@ -396,7 +396,7 @@ local_costmap:
       width: 5
       height: 5
       resolution: 0.05
-      robot_radius: 0.2
+      robot_radius: 0.3
       plugins: ["static_layer", "intensity_voxel_layer", "inflation_layer"]
       intensity_voxel_layer:
         plugin: pb_nav2_costmap_2d::IntensityVoxelLayer
@@ -442,7 +442,7 @@ global_costmap:
       publish_frequency: 2.0
       global_frame: map
       robot_base_frame: gimbal_yaw_fake
-      robot_radius: 0.2
+      robot_radius: 0.3
       resolution: 0.05
       plugins: ["static_layer", "intensity_voxel_layer", "inflation_layer"]
       intensity_voxel_layer:
@@ -514,7 +514,7 @@ planner_server:
       motion_model_for_search: "DUBIN"    # For Hybrid Dubin, Redds-Shepp
       angle_quantization_bins: 64         # For Hybrid nodes: 搜索的角度桶数，对于2D节点必须为1（无角度搜索）
       analytic_expansion_ratio: 3.5       # For Hybrid/Lattice nodes: 在搜索过程中尝试解析扩展的比例，用于最终接近。
-      analytic_expansion_max_length: 3.0  # For Hybrid/Lattice nodes: 解析扩展被认为有效的最大长度，以防止不安全的捷径（单位：米）。这应该与最小转弯半径成比例，不应小于最小半径的4-5倍。
+      analytic_expansion_max_length: 1.0  # For Hybrid/Lattice nodes: 解析扩展被认为有效的最大长度，以防止不安全的捷径（单位：米）。这应该与最小转弯半径成比例，不应小于最小半径的4-5倍。
       minimum_turning_radius: 0.05        # For Hybrid/Lattice nodes: 路径/车辆的最小转弯半径，单位：米
       retrospective_penalty: 0.025        # For Hybrid/Lattice nodes: 优先考虑路径上较晚的机动而不是较早的机动。节省搜索时间，因为较早的节点不会被扩展，直到有必要。必须 >= 0.0且 <= 1.0
       reverse_penalty: 1.0                # For Reeds-Shepp model: 应用于倒车的惩罚，必须 >= 1
@@ -592,8 +592,8 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
-    max_velocity: [2.5, 2.5, 3.0]
-    min_velocity: [-2.5, -2.5, -3.0]
+    max_velocity: [1.0, 1.0, 1.5]
+    min_velocity: [-1.0, -1.0, -1.5]
     max_accel: [4.5, 4.5, 5.0]
     max_decel: [-4.5, -4.5, -5.0]
     odom_topic: "odometry"
