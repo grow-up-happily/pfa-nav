@@ -203,9 +203,18 @@ void publish_frame_world(
         string all_points_dir(
           string(string(ROOT_DIR) + "PCD/scans_") + to_string(pcd_index) + string(".pcd"));
         pcl::PCDWriter pcd_writer;
-        std::cout << "current scan saved to /PCD/" << all_points_dir << '\n';
-        pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
-        pcl_wait_save->clear();
+        RCLCPP_INFO(
+          LOGGER, "Saving accumulated 3D point cloud snapshot to %s (%zu points)",
+          all_points_dir.c_str(),
+          pcl_wait_save->size());
+        int ret = pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
+        if (ret == 0) {
+          RCLCPP_INFO(LOGGER, "Saved accumulated 3D point cloud snapshot: %s", all_points_dir.c_str());
+        } else {
+          RCLCPP_ERROR(
+            LOGGER, "Failed to save accumulated 3D point cloud snapshot: %s (code %d)",
+            all_points_dir.c_str(), ret);
+        }
         scan_wait_num = 0;
       }
     }
@@ -1034,7 +1043,17 @@ int main(int argc, char ** argv)
     string file_name = string("scans.pcd");
     string all_points_dir(string(string(ROOT_DIR) + "PCD/") + file_name);
     pcl::PCDWriter pcd_writer;
-    pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
+    RCLCPP_INFO(
+      LOGGER, "Saving final 3D point cloud to %s (%zu points)", all_points_dir.c_str(),
+      pcl_wait_save->size());
+    int ret = pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
+    if (ret == 0) {
+      RCLCPP_INFO(LOGGER, "Saved final 3D point cloud: %s", all_points_dir.c_str());
+    } else {
+      RCLCPP_ERROR(
+        LOGGER, "Failed to save final 3D point cloud: %s (code %d)", all_points_dir.c_str(),
+        ret);
+    }
   }
   fout_out.close();
   fout_imu_pbp.close();

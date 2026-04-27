@@ -45,6 +45,11 @@ def generate_launch_description():
     rviz_config_file = LaunchConfiguration("rviz_config_file")
     use_robot_state_pub = LaunchConfiguration("use_robot_state_pub")
     use_rviz = LaunchConfiguration("use_rviz")
+    auto_save_map = LaunchConfiguration("auto_save_map")
+    auto_save_map_dir = LaunchConfiguration("auto_save_map_dir")
+    auto_save_map_intervals = LaunchConfiguration("auto_save_map_intervals")
+    auto_save_pcd = LaunchConfiguration("auto_save_pcd")
+    auto_save_pcd_interval = LaunchConfiguration("auto_save_pcd_interval")
 
     # Declare the launch arguments
     declare_namespace_cmd = DeclareLaunchArgument(
@@ -133,6 +138,36 @@ def generate_launch_description():
         "use_rviz", default_value="True", description="Whether to start RVIZ"
     )
 
+    declare_auto_save_map_cmd = DeclareLaunchArgument(
+        "auto_save_map",
+        default_value="True",
+        description="Whether to periodically save the SLAM map.",
+    )
+
+    declare_auto_save_map_dir_cmd = DeclareLaunchArgument(
+        "auto_save_map_dir",
+        default_value="/home/lcy/sight_test/pfa-nav/src/pb2025_sentry_nav/pb2025_nav_bringup/map/reality",
+        description="Directory where periodically saved maps are written.",
+    )
+
+    declare_auto_save_map_intervals_cmd = DeclareLaunchArgument(
+        "auto_save_map_intervals",
+        default_value="10,30,60,90,120,150,180,210,240,270,300",
+        description="Comma-separated one-shot map save times in seconds.",
+    )
+
+    declare_auto_save_pcd_cmd = DeclareLaunchArgument(
+        "auto_save_pcd",
+        default_value="True",
+        description="Whether point_lio periodically saves accumulated point clouds.",
+    )
+
+    declare_auto_save_pcd_interval_cmd = DeclareLaunchArgument(
+        "auto_save_pcd_interval",
+        default_value="300",
+        description="Number of LiDAR frames between point_lio accumulated PCD snapshots.",
+    )
+
     # Create our own temporary YAML files that include substitutions
 
     configured_params = ParameterFile(
@@ -188,6 +223,11 @@ def generate_launch_description():
             "autostart": autostart,
             "use_composition": use_composition,
             "use_respawn": use_respawn,
+            "auto_save_map": auto_save_map,
+            "auto_save_map_dir": auto_save_map_dir,
+            "auto_save_map_intervals": auto_save_map_intervals,
+            "auto_save_pcd": auto_save_pcd,
+            "auto_save_pcd_interval": auto_save_pcd_interval,
         }.items(),
     )
 
@@ -216,6 +256,11 @@ def generate_launch_description():
     ld.add_action(declare_use_robot_state_pub_cmd)
     ld.add_action(declare_use_rviz_cmd)
     ld.add_action(declare_use_respawn_cmd)
+    ld.add_action(declare_auto_save_map_cmd)
+    ld.add_action(declare_auto_save_map_dir_cmd)
+    ld.add_action(declare_auto_save_map_intervals_cmd)
+    ld.add_action(declare_auto_save_pcd_cmd)
+    ld.add_action(declare_auto_save_pcd_interval_cmd)
 
     # Add the actions to launch all of the navigation nodes
     ld.add_action(start_robot_state_publisher_cmd)

@@ -51,6 +51,11 @@ def generate_launch_description():
     use_composition = LaunchConfiguration("use_composition")
     use_respawn = LaunchConfiguration("use_respawn")
     log_level = LaunchConfiguration("log_level")
+    auto_save_map = LaunchConfiguration("auto_save_map")
+    auto_save_map_dir = LaunchConfiguration("auto_save_map_dir")
+    auto_save_map_intervals = LaunchConfiguration("auto_save_map_intervals")
+    auto_save_pcd = LaunchConfiguration("auto_save_pcd")
+    auto_save_pcd_interval = LaunchConfiguration("auto_save_pcd_interval")
 
     # Create our own temporary YAML files that include substitutions
     param_substitutions = {"use_sim_time": use_sim_time, "yaml_filename": map_yaml_file}
@@ -143,6 +148,36 @@ def generate_launch_description():
         "log_level", default_value="info", description="log level"
     )
 
+    declare_auto_save_map_cmd = DeclareLaunchArgument(
+        "auto_save_map",
+        default_value="True",
+        description="Whether to periodically save the SLAM map.",
+    )
+
+    declare_auto_save_map_dir_cmd = DeclareLaunchArgument(
+        "auto_save_map_dir",
+        default_value="/home/lcy/sight_test/pfa-nav/src/pb2025_sentry_nav/pb2025_nav_bringup/map/simulation",
+        description="Directory where periodically saved maps are written.",
+    )
+
+    declare_auto_save_map_intervals_cmd = DeclareLaunchArgument(
+        "auto_save_map_intervals",
+        default_value="10,30,60,90,120,150,180,210,240,270,300",
+        description="Comma-separated one-shot map save times in seconds.",
+    )
+
+    declare_auto_save_pcd_cmd = DeclareLaunchArgument(
+        "auto_save_pcd",
+        default_value="True",
+        description="Whether point_lio periodically saves accumulated point clouds.",
+    )
+
+    declare_auto_save_pcd_interval_cmd = DeclareLaunchArgument(
+        "auto_save_pcd_interval",
+        default_value="300",
+        description="Number of LiDAR frames between point_lio accumulated PCD snapshots.",
+    )
+
     # Specify the actions
     bringup_cmd_group = GroupAction(
         [
@@ -169,6 +204,12 @@ def generate_launch_description():
                     "autostart": autostart,
                     "use_respawn": use_respawn,
                     "params_file": params_file,
+                    "log_level": log_level,
+                    "auto_save_map": auto_save_map,
+                    "auto_save_map_dir": auto_save_map_dir,
+                    "auto_save_map_intervals": auto_save_map_intervals,
+                    "auto_save_pcd": auto_save_pcd,
+                    "auto_save_pcd_interval": auto_save_pcd_interval,
                 }.items(),
             ),
             IncludeLaunchDescription(
@@ -186,6 +227,7 @@ def generate_launch_description():
                     "use_composition": use_composition,
                     "use_respawn": use_respawn,
                     "container_name": "nav2_container",
+                    "log_level": log_level,
                 }.items(),
             ),
             IncludeLaunchDescription(
@@ -201,6 +243,7 @@ def generate_launch_description():
                     "use_composition": use_composition,
                     "use_respawn": use_respawn,
                     "container_name": "nav2_container",
+                    "log_level": log_level,
                 }.items(),
             ),
         ]
@@ -225,6 +268,11 @@ def generate_launch_description():
     ld.add_action(declare_use_respawn_cmd)
     ld.add_action(declare_enable_nav_cmd)
     ld.add_action(declare_log_level_cmd)
+    ld.add_action(declare_auto_save_map_cmd)
+    ld.add_action(declare_auto_save_map_dir_cmd)
+    ld.add_action(declare_auto_save_map_intervals_cmd)
+    ld.add_action(declare_auto_save_pcd_cmd)
+    ld.add_action(declare_auto_save_pcd_interval_cmd)
 
     # Add the actions to launch all of the navigation nodes
     ld.add_action(bringup_cmd_group)

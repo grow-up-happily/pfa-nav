@@ -17,10 +17,13 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.conditions import IfCondition
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.descriptions import ParameterFile
+from launch_ros.parameter_descriptions import ParameterValue
 from nav2_common.launch import RewrittenYaml
 
 
@@ -35,6 +38,11 @@ def generate_launch_description():
     autostart = LaunchConfiguration("autostart")
     use_respawn = LaunchConfiguration("use_respawn")
     log_level = LaunchConfiguration("log_level")
+    auto_save_map = LaunchConfiguration("auto_save_map")
+    auto_save_map_dir = LaunchConfiguration("auto_save_map_dir")
+    auto_save_map_intervals = LaunchConfiguration("auto_save_map_intervals")
+    auto_save_pcd = LaunchConfiguration("auto_save_pcd")
+    auto_save_pcd_interval = LaunchConfiguration("auto_save_pcd_interval")
 
     # Variables
     lifecycle_nodes = ["map_saver"]
@@ -85,6 +93,36 @@ def generate_launch_description():
         "log_level", default_value="info", description="log level"
     )
 
+    declare_auto_save_map_cmd = DeclareLaunchArgument(
+        "auto_save_map",
+        default_value="True",
+        description="Whether to periodically save the SLAM map.",
+    )
+
+    declare_auto_save_map_dir_cmd = DeclareLaunchArgument(
+        "auto_save_map_dir",
+        default_value="/home/lcy/sight_test/pfa-nav/src/pb2025_sentry_nav/pb2025_nav_bringup/map/simulation",
+        description="Directory where periodically saved maps are written.",
+    )
+
+    declare_auto_save_map_intervals_cmd = DeclareLaunchArgument(
+        "auto_save_map_intervals",
+        default_value="10,30,60,90,120,150,180,210,240,270,300",
+        description="Comma-separated one-shot map save times in seconds.",
+    )
+
+    declare_auto_save_pcd_cmd = DeclareLaunchArgument(
+        "auto_save_pcd",
+        default_value="True",
+        description="Whether point_lio periodically saves accumulated point clouds.",
+    )
+
+    declare_auto_save_pcd_interval_cmd = DeclareLaunchArgument(
+        "auto_save_pcd_interval",
+        default_value="300",
+        description="Number of LiDAR frames between point_lio accumulated PCD snapshots.",
+    )
+
     start_map_saver_server_cmd = Node(
         package="nav2_map_server",
         executable="map_saver_server",
@@ -108,6 +146,18 @@ def generate_launch_description():
         ],
     )
 
+    start_auto_save_map_cmd = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(bringup_dir, "launch", "auto_save_map.launch.py")
+        ),
+        condition=IfCondition(auto_save_map),
+        launch_arguments={
+            "namespace": namespace,
+            "save_dir": auto_save_map_dir,
+            "intervals": auto_save_map_intervals,
+        }.items(),
+    )
+
     start_pointcloud_to_laserscan_node = Node(
         package="pointcloud_to_laserscan",
         executable="pointcloud_to_laserscan_node",
@@ -125,7 +175,7 @@ def generate_launch_description():
 
     start_sync_slam_toolbox_node = Node(
         package="slam_toolbox",
-        executable="sync_slam_toolbox_node",
+        executable="async_slam_toolbox_node",
         name="slam_toolbox",
         output="screen",
         respawn=use_respawn,
@@ -149,7 +199,16 @@ def generate_launch_description():
         parameters=[
             configured_params,
             {"prior_pcd.enable": False},
-            {"pcd_save.pcd_save_en": True},
+            {
+                "pcd_save.pcd_save_en": ParameterValue(
+                    auto_save_pcd, value_type=bool
+                )
+            },
+            {
+                "pcd_save.interval": ParameterValue(
+                    auto_save_pcd_interval, value_type=int
+                )
+            },
         ],
         arguments=["--ros-args", "--log-level", log_level],
     )
@@ -212,10 +271,16 @@ def generate_launch_description():
     ld.add_action(declare_autostart_cmd)
     ld.add_action(declare_use_respawn_cmd)
     ld.add_action(declare_log_level_cmd)
+    ld.add_action(declare_auto_save_map_cmd)
+    ld.add_action(declare_auto_save_map_dir_cmd)
+    ld.add_action(declare_auto_save_map_intervals_cmd)
+    ld.add_action(declare_auto_save_pcd_cmd)
+    ld.add_action(declare_auto_save_pcd_interval_cmd)
 
     # Running Map Saver Server
     ld.add_action(start_map_saver_server_cmd)
     ld.add_action(start_lifecycle_manager_cmd)
+    ld.add_action(start_auto_save_map_cmd)
 
     ld.add_action(start_pointcloud_to_laserscan_node)
     ld.add_action(start_sync_slam_toolbox_node)
