@@ -1,8 +1,8 @@
 # 地图对齐工具集 (Map Alignment Tools)
 
-本目录包含两个互相配合的工具,用于把一台机器人扫出来的 2D 占用栅格地图 + 3D 点云,对齐到另一个坐标系(比如仿真世界、另一台机器人的地图)。
+本目录包含三个互相配合的工具,用于把一台机器人扫出来的 2D 占用栅格地图 + 3D 点云,对齐到另一个坐标系(比如仿真世界、另一台机器人的地图)。
 
-> **设计前提**:你的 SLAM 系统使用**重力对齐**(point_lio / FAST-LIO 等会自动用 IMU 把 map 坐标系 z 轴对齐到世界垂直方向)。在这种前提下,两套地图之间的差异**只可能是水平面上的刚体变换**(yaw 旋转 + xy 平移)。这两个工具就专门解决这个问题。
+> **设计前提**:你的 SLAM 系统使用**重力对齐**(point_lio / FAST-LIO 等会自动用 IMU 把 map 坐标系 z 轴对齐到世界垂直方向)。在这种前提下,两套地图之间的差异**只可能是水平面上的刚体变换**(yaw 旋转 + xy 平移)。这些工具就专门解决这个问题。
 
 ---
 
@@ -12,6 +12,7 @@
 - [快速开始](#快速开始)
 - [auto_align_map.py 详细用法](#auto_align_mappy-详细用法)
 - [hero_to_sentry_map_converter.py 详细用法](#hero_to_sentry_map_converterpy-详细用法)
+- [sentry_to_hero_map_converter.py 详细用法](#sentry_to_hero_map_converterpy-详细用法)
 - [输出文件结构](#输出文件结构)
 - [工作原理](#工作原理)
 - [启动导航测试](#启动导航测试)
@@ -26,12 +27,11 @@
 |------|------|
 | `auto_align_map.py` | **自动配准**:输入两张地图,自动算出 dyaw/dx/dy |
 | `hero_to_sentry_map_converter.py` | **手动转换**:已知 dyaw/dx/dy,把 map+pcd 应用变换 |
+| `sentry_to_hero_map_converter.py` | **反向转换**:输入已知的英雄->哨兵 dyaw/dx/dy,自动求逆后把哨兵 map+pcd 转到英雄坐标系 |
 
-通常你只需要用第一个,加 `--apply` 参数它会自动调用第二个。
+通常你只需要用 `auto_align_map.py`,加 `--apply` 参数它会自动调用 `hero_to_sentry_map_converter.py`。如果已经有一组英雄到哨兵的变换参数,想反过来把哨兵图转到英雄坐标系,用 `sentry_to_hero_map_converter.py`。
 
 ---
-
-c
 
 ### 输出格式
 
@@ -131,6 +131,109 @@ pi          ← 180°
 
 ---
 
+## `sentry_to_hero_map_converter.py` 详细用法
+
+### 用途
+
+把哨兵侧的 `map.yaml/.pgm/scans.pcd` 转到英雄坐标系。你不需要手算反向的 `dx/dy`;只要输入已知的**英雄 -> 哨兵** `dyaw / dx / dy`,脚本会自动求逆,然后调用 `hero_to_sentry_map_converter.py` 执行真正的地图转换。
+
+原始英雄到哨兵变换是:
+
+```text
+p_sentry = Rz(dyaw) * p_hero + (dx, dy)
+```
+
+脚本内部会自动换成:
+
+```text
+p_hero = Rz(-dyaw) * p_sentry + (dx_inv, dy_inv)
+```
+
+其中:
+
+```text
+dx_inv = -cos(dyaw) * dx - sin(dyaw) * dy
+dy_inv =  sin(dyaw) * dx - cos(dyaw) * dy
+```
+
+### 交互模式(适合人工调参)
+
+```bash
+python3 sentry_to_hero_map_converter.py
+```
+
+会一步步问:
+
+```text
+请输入【哨兵源】2D 地图 yaml 路径 [...]:
+请输入【哨兵源】3D 点云 pcd 路径 [...]:
+请输入已知【英雄 -> 哨兵】dyaw [0]:
+请输入已知【英雄 -> 哨兵】dx (米) [0]:
+请输入已知【英雄 -> 哨兵】dy (米) [0]:
+输出目录名 [...]:
+```
+
+### 命令行模式(适合脚本/重复运行)
+
+```bash
+python3 sentry_to_hero_map_converter.py --no-interactive \
+    --sentry-map-yaml <哨兵_map.yaml> \
+    --sentry-pcd <哨兵_scans.pcd> \
+    --hero-to-sentry-dyaw '90 deg' \
+    --hero-to-sentry-dx 1.5 \
+    --hero-to-sentry-dy -0.8 \
+    --output-folder-name sentry_to_hero \
+    --force
+```
+
+上面这个例子里,脚本会自动算出真正应用到哨兵源地图上的参数:
+
+```text
+SENTRY->HERO dyaw = -90 deg
+SENTRY->HERO dx   = 0.8
+SENTRY->HERO dy   = 1.5
+```
+
+### 只查看反向命令,不执行转换
+
+调参时可以先用 `--print-command-only` 看看脚本算出来的反向参数和最终调用命令:
+
+```bash
+python3 sentry_to_hero_map_converter.py --no-interactive \
+    --sentry-map-yaml <哨兵_map.yaml> \
+    --sentry-pcd <哨兵_scans.pcd> \
+    --hero-to-sentry-dyaw '90 deg' \
+    --hero-to-sentry-dx 1.5 \
+    --hero-to-sentry-dy -0.8 \
+    --print-command-only
+```
+
+### 参数表
+
+| 参数 | 含义 |
+|------|------|
+| `--sentry-map-yaml PATH` | 哨兵侧源 2D 地图 yaml |
+| `--sentry-pcd PATH` | 哨兵侧源 3D 点云 pcd |
+| `--hero-to-sentry-dyaw EXPR` | 已知的英雄 -> 哨兵 yaw 旋转,支持 `pi/2`、`90 deg` 等写法 |
+| `--hero-to-sentry-dx METERS` | 已知的英雄 -> 哨兵 x 平移(米) |
+| `--hero-to-sentry-dy METERS` | 已知的英雄 -> 哨兵 y 平移(米) |
+| `--source-lidar-mount X Y Z ROLL PITCH YAW` | 可选,当前源数据对应机器人的雷达安装位姿;原样传给底层 converter |
+| `--source-pcd-yaw-bias EXPR` | 可选,当前源 PCD 的额外 yaw 偏置;原样传给底层 converter |
+| `--output-folder-name NAME` | 输出目录名(默认 `sentry_to_hero_时间戳`) |
+| `--converter-script PATH` | 可选,指定底层 `hero_to_sentry_map_converter.py` 路径 |
+| `--print-command-only` | 只打印反向参数和底层调用命令,不真正转换 |
+| `--force` | 同名输出目录已存在则覆盖 |
+| `--no-interactive` | 关闭交互(命令行模式必加) |
+
+### 注意事项
+
+- `--hero-to-sentry-*` 填的是你已知的**英雄 -> 哨兵**参数,不是手算后的反向参数。
+- 不要简单把 `dx/dy` 互换或取反;反向平移必须结合 `dyaw` 一起算,脚本会自动处理。
+- 输出目录结构和 `hero_to_sentry_map_converter.py` 完全一样,导航使用 `converted_assets/map.yaml` 和 `converted_assets/scans.pcd`。
+- 如果使用 `--source-lidar-mount` 或 `--source-pcd-yaw-bias`,它们描述的是**当前哨兵源数据**的附加修正,不是英雄侧旧数据的修正。
+
+---
+
 ## 输出文件结构
 
 每次跑完 converter(无论是 auto_align 调用还是手动跑)都会生成:
@@ -142,13 +245,13 @@ pi          ← 180°
 │   ├── source_map.pgm
 │   └── source_scans.pcd
 ├── converted_assets/              ★ 这里才是给导航用的成果
-│   ├── map.yaml                  ← origin 字段已被旋转+平移
-│   ├── map.pgm                   ← .pgm 像素本身没动
+│   ├── map.yaml                  ← image 指向转换后的 map.pgm,origin yaw 固定为 0
+│   ├── map.pgm                   ← .pgm 像素已被旋转/平移到目标坐标系
 │   └── scans.pcd                 ← 每个点都做了刚体变换
 └── metadata.json                  ← 记录这次用了什么 dyaw/dx/dy
 ```
 
-**为什么 .pgm 没动?** 2D 占用栅格的旋转通过修改 `map.yaml` 里的 `origin: [x, y, yaw]` 字段实现,nav2 加载时会按 origin 自动放到正确位置和朝向。这样像素无损,反复转换不会画质损失。
+**为什么要旋转 .pgm?** 当前 converter 会把 2D 占用栅格像素实际旋转/平移,再把输出 `map.yaml` 的 `origin` yaw 固定为 0。这样可以避开不同 nav2 map_server / RViz 版本对 yaml `origin` yaw 支持不一致的问题,保证 2D 栅格地图和 3D PCD 在同一个目标坐标系里对齐。
 
 `auto_align_report.json` 会保存在你执行 `auto_align_map.py` 的当前目录,内容包括:
 - 源/参考地图的元数据
@@ -186,7 +289,7 @@ p' = Rz(dyaw) * p + (dx, dy, 0)
 ```
 其中 `Rz(θ)` 是绕世界 Z 轴旋转 θ 的矩阵。
 
-对 map.yaml 里的 `origin = [ox, oy, oyaw]`,应用同一变换的 2D 投影:
+对 2D 地图,converter 会把 .pgm 像素实际旋转/平移到目标坐标系,再写出新的 `origin = [new_ox, new_oy, 0]`。如果只看原始刚体变换,它对应的 2D 投影是:
 ```
 nx   = cos(dyaw) * ox - sin(dyaw) * oy + dx
 ny   = sin(dyaw) * ox + cos(dyaw) * oy + dy
