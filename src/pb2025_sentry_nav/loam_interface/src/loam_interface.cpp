@@ -71,7 +71,16 @@ void LoamInterfaceNode::odometryCallback(const nav_msgs::msg::Odometry::ConstSha
         base_frame_, lidar_frame_, msg->header.stamp, rclcpp::Duration::from_seconds(0.5));
       tf2::Transform tf_base_frame_to_lidar;
       tf2::fromMsg(tf_stamped.transform, tf_base_frame_to_lidar);
-      tf_odom_to_lidar_odom_ = tf_base_frame_to_lidar;
+
+      // Capture point_lio's first lidar pose (= rot_init from gravity alignment).
+      // Without this, when point_lio is gravity-aligned (gravity = [0,0,-9.81] in YAML),
+      // the lidar's initial orientation in point_lio's world is rot_init, not identity.
+      // We need to subtract this off so that downstream odom frame is anchored at base
+      // exactly as URDF specifies, regardless of how the IMU/lidar is mounted.
+      tf2::Transform tf_lidar_init;
+      tf2::fromMsg(msg->pose.pose, tf_lidar_init);
+
+      tf_odom_to_lidar_odom_ = tf_base_frame_to_lidar * tf_lidar_init.inverse();
       base_frame_to_lidar_initialized_ = true;
     } catch (tf2::TransformException & ex) {
       RCLCPP_WARN(this->get_logger(), "TF lookup failed: %s Retrying...", ex.what());
