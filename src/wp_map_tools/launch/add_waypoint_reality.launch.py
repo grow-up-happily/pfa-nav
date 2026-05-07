@@ -19,6 +19,7 @@
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 import launch_ros.actions
@@ -28,12 +29,21 @@ import launch.events
 def generate_launch_description():
     launch_file_dir = os.path.join(get_package_share_directory('wp_map_tools'), 'launch')
 
-    # 声明launch文件参数，用于指定map.yaml文件路径
-    map_file = os.path.join(
+    # 默认地图路径
+    default_map_file = os.path.join(
         get_package_share_directory('pb2025_nav_bringup'),
         'map',
         'reality/game.yaml'
     )
+
+    # 声明launch文件参数，用于指定map.yaml文件路径
+    declare_map_arg = DeclareLaunchArgument(
+        'map',
+        default_value=default_map_file,
+        description='Full path to map yaml file to load'
+    )
+
+    map_file = LaunchConfiguration('map')
 
     # 创建map_server节点
     map_server_cmd = Node(
@@ -98,6 +108,7 @@ def generate_launch_description():
     ld = LaunchDescription()
 
     # Add the commands to the launch description
+    ld.add_action(declare_map_arg)
     ld.add_action(map_server_cmd)
     ld.add_action(start_lifecycle_manager_cmd)
     ld.add_action(map_tf_cmd)

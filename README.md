@@ -175,6 +175,8 @@ sh脚本使用：
     进下面launch文件改目录 
         实车：
             ros2 launch wp_map_tools add_waypoint_reality.launch.py （改launch下的add_waypoint_reality.launch.py）
+            也可以通过 map 参数指定地图（默认 pb2025_nav_bringup/map/reality/game.yaml）：
+            ros2 launch wp_map_tools add_waypoint_reality.launch.py map:=/home/lcy/sight_test/cjj/converted_test_map/converted_assets/map.yaml
         仿真：
             ros2 launch wp_map_tools add_waypoint_simulation.launch.py
             记得改game.py里的self.nav_ac = ActionClient(self, NavigateToPose, '/red_standard_robot1/navigate_to_pose')
