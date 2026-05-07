@@ -144,9 +144,15 @@ def generate_launch_description():
         description="Whether to periodically save the SLAM map.",
     )
 
+    workspace_root = os.path.normpath(
+        os.path.join(bringup_dir, "..", "..", "..", "..")
+    )
+    src_map_reality_dir = os.path.join(
+        workspace_root, "src", "pb2025_sentry_nav", "pb2025_nav_bringup", "map", "reality"
+    )
     declare_auto_save_map_dir_cmd = DeclareLaunchArgument(
         "auto_save_map_dir",
-        default_value=os.path.join(bringup_dir, "map", "reality"),
+        default_value=src_map_reality_dir,
         description="Directory where periodically saved maps are written.",
     )
 

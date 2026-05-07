@@ -97,6 +97,13 @@ def _create_save_actions(context):
     return actions
 
 
+def _src_map_dir(bringup_dir, subdir):
+    workspace_root = os.path.normpath(os.path.join(bringup_dir, "..", "..", "..", ".."))
+    return os.path.join(
+        workspace_root, "src", "pb2025_sentry_nav", "pb2025_nav_bringup", "map", subdir
+    )
+
+
 def generate_launch_description():
     bringup_dir = get_package_share_directory("pb2025_nav_bringup")
 
@@ -109,7 +116,7 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "save_dir",
-                default_value=os.path.join(bringup_dir, "map", "simulation"),
+                default_value=_src_map_dir(bringup_dir, "simulation"),
                 description="Directory where auto-saved .pgm/.yaml maps are written.",
             ),
             DeclareLaunchArgument(
