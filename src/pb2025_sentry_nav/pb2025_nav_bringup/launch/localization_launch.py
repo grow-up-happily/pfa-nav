@@ -130,6 +130,23 @@ def generate_launch_description():
         arguments=["--ros-args", "--log-level", log_level],
     )
 
+    start_prior_pcd_publisher_node = Node(
+        package="pb2025_nav_bringup",
+        executable="prior_pcd_publisher.py",
+        name="prior_pcd_publisher",
+        output="screen",
+        parameters=[
+            configured_params,
+            {"use_sim_time": use_sim_time},
+            {"file_name": prior_pcd_file},
+            {"frame_id": "map"},
+            {"base_frame": "base_footprint"},
+            {"lidar_frame": "front_mid360"},
+            {"publish_period_sec": 1.0},
+        ],
+        arguments=["--ros-args", "--log-level", log_level],
+    )
+
     load_nodes = GroupAction(
         condition=IfCondition(PythonExpression(["not ", use_composition])),
         actions=[
@@ -252,6 +269,7 @@ def generate_launch_description():
 
     # Add the actions to launch all of the localiztion nodes
     ld.add_action(start_point_lio_node)
+    ld.add_action(start_prior_pcd_publisher_node)
     ld.add_action(load_nodes)
     ld.add_action(load_composable_nodes)
 
