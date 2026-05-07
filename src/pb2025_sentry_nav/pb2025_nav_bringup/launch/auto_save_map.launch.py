@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import shlex
 
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, ExecuteProcess, OpaqueFunction, TimerAction
 from launch.substitutions import LaunchConfiguration
@@ -96,6 +98,8 @@ def _create_save_actions(context):
 
 
 def generate_launch_description():
+    bringup_dir = get_package_share_directory("pb2025_nav_bringup")
+
     return LaunchDescription(
         [
             DeclareLaunchArgument(
@@ -105,7 +109,7 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "save_dir",
-                default_value="/home/lcy/sight_test/pfa-nav/src/pb2025_sentry_nav/pb2025_nav_bringup/map/simulation",
+                default_value=os.path.join(bringup_dir, "map", "simulation"),
                 description="Directory where auto-saved .pgm/.yaml maps are written.",
             ),
             DeclareLaunchArgument(
