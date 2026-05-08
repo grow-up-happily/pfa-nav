@@ -14,7 +14,7 @@ from rclpy.action import ActionClient
 from rclpy.duration import Duration
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile
 from rclpy.time import Time
-from std_msgs.msg import Float32
+from std_msgs.msg import Float32, UInt8
 from tf2_ros import Buffer, TransformException, TransformListener
 from tf2_msgs.msg import TFMessage
 import yaml
@@ -177,6 +177,9 @@ class AutoNavNode(Node):
         straight_path_topic='/auto_nav_straight_path',
         waypoint_marker_topic='/waypoint_markers',
         angle_diff_topic='/angle_diff',
+        judge_topic='/judge',
+        judge_home_id=1,
+        judge_remote_id=4,
     ):
         super().__init__('auto_nav_node')
         
@@ -185,6 +188,33 @@ class AutoNavNode(Node):
         self.get_logger().info(f"已从 {yaml_path} 加载 {len(self.waypoints)} 个航点")
         
         self.through_all_waypoints = through_all_waypoints
+
+        self.judge_topic = judge_topic
+        self.judge_enabled = bool(judge_topic)
+        self.judge_home_id = judge_home_id
+        self.judge_remote_id = judge_remote_id
+        self.judge_control_active = False
+        self.judge_idle = False
+        self.last_passed_waypoint_id = None
+
+        if self.judge_enabled:
+            required_ids = {
+                self.judge_home_id,
+                self.judge_remote_id,
+                *STRAIGHT_WAYPOINT_IDS,
+            }
+            for waypoint_id in sorted(required_ids):
+                if waypoint_id < 1 or waypoint_id > len(self.waypoints):
+                    raise ValueError(
+                        f"/judge 模式需要 YAML 包含航点 {waypoint_id}，"
+                        f"当前只有 {len(self.waypoints)} 个航点"
+                    )
+
+        order_was_provided = order is not None
+        if order is None:
+            order = [self.judge_home_id if self.judge_enabled else 1]
+            self.judge_control_active = self.judge_enabled
+            self.judge_idle = self.judge_enabled
 
         if self.through_all_waypoints:
             self.targets = list(range(len(self.waypoints)))
@@ -209,6 +239,18 @@ class AutoNavNode(Node):
         if not self.targets:
             self.get_logger().error("未加载到任何目标点，退出")
             raise ValueError("目标点列表为空")
+
+        self.last_passed_waypoint_id = self.targets[0] + 1
+        if self.judge_enabled:
+            self.judge_sub = self.create_subscription(
+                UInt8, judge_topic, self.judge_callback, 10
+            )
+            self.get_logger().info(
+                f"已订阅 {judge_topic}: data=1 -> 航点 {self.judge_home_id}, "
+                f"data=2 -> 航点 {self.judge_remote_id}"
+            )
+            if not order_was_provided:
+                self.get_logger().info("未指定 --order，等待 /judge 指令后开始导航")
         
         # 导航客户端
         self.nav_ac = ActionClient(self, NavigateToPose, '/navigate_to_pose')
@@ -269,7 +311,10 @@ class AutoNavNode(Node):
 
         # 固定使用 YAML 中的 Waypoint_2 和 Waypoint_3 做直行校准段。
         self.calibration_transitions = set(STRAIGHT_TRANSITIONS)
-        self.straight_enabled = bool(enable_straight) and abs(straight_distance) > 0.0
+        self.straight_enabled = (
+            (bool(enable_straight) or self.judge_enabled) and
+            abs(straight_distance) > 0.0
+        )
         self.straight_speed = abs(straight_speed)
         self.straight_yaw_tolerance = abs(straight_yaw_tolerance)
         self.straight_stop_margin = abs(straight_stop_margin)
@@ -338,6 +383,7 @@ class AutoNavNode(Node):
         self.goal_sequence = 0
         self.active_goal_sequence = None
         self.ignored_goal_sequences = set()
+        self.judge_ignored_goal_sequences = set()
         self.pending_straight_handoff_next_idx = None
         self.straight_handoff_cancel_requested = False
         self.straight_path_indices = None
@@ -459,6 +505,113 @@ class AutoNavNode(Node):
         )
         for _, level_name, node_name, text in recent_logs[-8:]:
             self.get_logger().warn(f"  [{level_name}] [{node_name}]: {text}")
+
+    def judge_callback(self, msg):
+        """接收裁判指令：1 回 1 点，2 去 4 点。直行校准中忽略新指令。"""
+        command = int(msg.data)
+        if command == 1:
+            target_id = self.judge_home_id
+        elif command == 2:
+            target_id = self.judge_remote_id
+        else:
+            self.get_logger().warn(f"忽略 /judge 未知值: {command}")
+            return
+
+        if self.through_all_waypoints:
+            self.get_logger().warn("整条路线模式下忽略 /judge 指令")
+            return
+        if self.calibrating:
+            self.get_logger().warn(
+                f"直线校准中忽略 /judge={command}，当前直线段完成后继续原任务"
+            )
+            return
+
+        current_id = self.current_route_start_id()
+        route_ids = self.build_judge_route(current_id, target_id)
+        if not route_ids:
+            return
+
+        self.activate_judge_route(route_ids, command)
+
+    def current_route_start_id(self):
+        if self.last_passed_waypoint_id is not None:
+            return self.last_passed_waypoint_id
+        if self.targets and 0 <= self.current_idx < len(self.targets):
+            return self.targets[self.current_idx] + 1
+        return self.judge_home_id
+
+    def build_judge_route(self, current_id, target_id):
+        if target_id == self.judge_remote_id:
+            if current_id <= self.judge_remote_id:
+                route_ids = list(range(current_id, self.judge_remote_id + 1))
+            else:
+                route_ids = [current_id, self.judge_remote_id]
+        elif target_id == self.judge_home_id:
+            if current_id >= self.judge_home_id:
+                route_ids = list(range(current_id, self.judge_home_id - 1, -1))
+            else:
+                route_ids = [current_id, self.judge_home_id]
+        else:
+            route_ids = [current_id, target_id]
+
+        for waypoint_id in route_ids:
+            if waypoint_id < 1 or waypoint_id > len(self.waypoints):
+                self.get_logger().error(
+                    f"/judge 路线包含无效航点 {waypoint_id}，"
+                    f"有效范围 [1-{len(self.waypoints)}]"
+                )
+                return []
+        return route_ids
+
+    def activate_judge_route(self, route_ids, command):
+        self.cancel_current_goal_for_judge()
+        self.targets = [waypoint_id - 1 for waypoint_id in route_ids]
+        self.judge_control_active = True
+        self.retry_count = 0
+        self.last_passed_waypoint_id = route_ids[0]
+        self.previous_idx_for_navigation = None
+
+        if len(route_ids) == 1:
+            self.current_idx = 0
+            self.judge_idle = True
+            self.sending = False
+            self.get_logger().info(
+                f"/judge={command}: 已在目标航点 {route_ids[0]}，等待下一条指令"
+            )
+            return
+
+        self.current_idx = 1
+        self.previous_idx_for_navigation = 0
+        self.judge_idle = False
+        self.sending = False
+        self.get_logger().info(
+            f"/judge={command}: 切换路线 {' -> '.join(map(str, route_ids))}"
+        )
+
+    def cancel_current_goal_for_judge(self):
+        old_sequence = self.active_goal_sequence
+        if old_sequence is not None:
+            self.judge_ignored_goal_sequences.add(old_sequence)
+            self.active_goal_sequence = None
+
+        goal_handle = self.current_goal_handle
+        self.current_goal_handle = None
+        if goal_handle is None:
+            return
+
+        cancel_future = goal_handle.cancel_goal_async()
+        cancel_future.add_done_callback(self.judge_cancel_callback)
+
+    def judge_cancel_callback(self, future):
+        try:
+            cancel_response = future.result()
+            cancel_count = len(cancel_response.goals_canceling)
+            if cancel_count > 0:
+                self.get_logger().info("/judge 已取消当前 Nav2 goal")
+            else:
+                self.get_logger().info("/judge 切换时当前 Nav2 goal 无需取消")
+        except Exception as ex:
+            self.get_logger().warn(f"/judge 取消当前 Nav2 goal 失败: {ex}")
 
     def quaternion_to_yaw(self, orientation):
         """从四元数计算 yaw"""
@@ -861,6 +1014,11 @@ class AutoNavNode(Node):
         status = result.status
         status_name = self.goal_status_name(status)
 
+        if goal_sequence in self.judge_ignored_goal_sequences:
+            self.judge_ignored_goal_sequences.discard(goal_sequence)
+            self.get_logger().info(f"忽略 /judge 切换前的 Nav2 结果: {status_name}")
+            return
+
         if goal_sequence in self.ignored_goal_sequences:
             self.ignored_goal_sequences.discard(goal_sequence)
             self.get_logger().info(
@@ -882,8 +1040,18 @@ class AutoNavNode(Node):
         
         if status == GoalStatus.STATUS_SUCCEEDED:
             self.get_logger().info('✓ 成功到达目标点')
+            reached_id = self.targets[self.current_idx] + 1
+            self.last_passed_waypoint_id = reached_id
+            if self.judge_control_active and self.current_idx >= len(self.targets) - 1:
+                self.get_logger().info(
+                    f"/judge 路线已到达航点 {reached_id}，等待下一条指令"
+                )
+                self.sending = False
+                self.retry_count = 0
+                self.judge_idle = True
+                return
             # 单目标点模式：到达后结束
-            if len(self.targets) == 1:
+            if not self.judge_control_active and len(self.targets) == 1:
                 self.get_logger().info('单目标点模式，导航完成，退出')
                 self.timer.cancel()
                 rclpy.shutdown()
@@ -904,7 +1072,10 @@ class AutoNavNode(Node):
 
         # 切换到下一个目标点
         finished_idx = self.current_idx
-        next_idx = (self.current_idx + 1) % len(self.targets)
+        next_idx = (
+            self.current_idx + 1 if self.judge_control_active
+            else (self.current_idx + 1) % len(self.targets)
+        )
         if status == GoalStatus.STATUS_SUCCEEDED and self.should_run_base_calibration(
             finished_idx, next_idx
         ):
@@ -1351,17 +1522,36 @@ class AutoNavNode(Node):
             )
         else:
             passed_idx = next_idx
-            self.current_idx = (next_idx + 1) % len(self.targets)
+            passed_id = self.targets[passed_idx] + 1
+            self.last_passed_waypoint_id = passed_id
             self.previous_idx_for_navigation = passed_idx
             passed_wp_name = self.waypoints[self.targets[passed_idx]].get(
                 'Name', f'Waypoint_{self.targets[passed_idx]+1}'
             )
+            if self.judge_control_active and passed_idx >= len(self.targets) - 1:
+                self.current_idx = passed_idx
+                self.judge_idle = True
+                self.get_logger().info(
+                    f"{pair[0]}->{pair[1]} 直线校准完成，已到达 /judge 目标 "
+                    f"{passed_wp_name}，实际前进 {traveled:.2f}m，等待下一条指令"
+                )
+                self.sending = False
+                return
+
+            self.current_idx = (
+                next_idx + 1 if self.judge_control_active
+                else (next_idx + 1) % len(self.targets)
+            )
             next_wp_name = self.waypoints[self.targets[self.current_idx]].get(
                 'Name', f'Waypoint_{self.targets[self.current_idx]+1}'
             )
+            continue_text = (
+                "继续 /judge 路线到" if self.judge_control_active
+                else "继续循环导航到"
+            )
             self.get_logger().info(
                 f"{pair[0]}->{pair[1]} 直线校准完成，已通过 {passed_wp_name}，"
-                f"实际前进 {traveled:.2f}m，继续循环导航到: {next_wp_name}"
+                f"实际前进 {traveled:.2f}m，{continue_text}: {next_wp_name}"
             )
         self.sending = False
 
@@ -1591,6 +1781,13 @@ class AutoNavNode(Node):
     def navigation_loop(self):
         """循环导航定时器回调"""
         if not self.sending and not self.calibrating and not self.base_waiting and not self.extra_straight_waiting:
+            if self.judge_control_active:
+                if self.judge_idle:
+                    return
+                if self.current_idx >= len(self.targets):
+                    self.get_logger().warn("/judge 路线索引越界，停止并等待下一条指令")
+                    self.judge_idle = True
+                    return
             if self.through_all_waypoints:
                 self.send_route_goal()
             else:
@@ -1611,8 +1808,8 @@ def main():
         '--order',
         type=int,
         nargs='+',
-        default=[1],
-        help='循环点编号列表（从1开始）'
+        default=None,
+        help='循环点编号列表（从1开始）；未指定时等待 /judge 指令'
     )
     parser.add_argument(
         '--through-all-waypoints',
@@ -1772,6 +1969,24 @@ def main():
         default='/angle_diff',
         help='直线校准时发布 yaw 偏差(rad)的 std_msgs/Float32 话题；未校准时发布 0.0'
     )
+    parser.add_argument(
+        '--judge-topic',
+        type=str,
+        default='/judge',
+        help='接收裁判指令的 std_msgs/msg/UInt8 话题；空字符串可关闭'
+    )
+    parser.add_argument(
+        '--judge-home-id',
+        type=int,
+        default=1,
+        help='/judge=1 时回到的航点编号'
+    )
+    parser.add_argument(
+        '--judge-remote-id',
+        type=int,
+        default=4,
+        help='/judge=2 时前往的航点编号'
+    )
     args = parser.parse_args()
     
     rclpy.init()
@@ -1807,7 +2022,10 @@ def main():
             tf_static_topic=args.tf_static_topic,
             straight_path_topic=args.straight_path_topic,
             waypoint_marker_topic=args.waypoint_marker_topic,
-            angle_diff_topic=args.angle_diff_topic
+            angle_diff_topic=args.angle_diff_topic,
+            judge_topic=args.judge_topic,
+            judge_home_id=args.judge_home_id,
+            judge_remote_id=args.judge_remote_id
         )
         rclpy.spin(node)
     except KeyboardInterrupt:
