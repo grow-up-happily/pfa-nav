@@ -29,6 +29,15 @@ from launch.substitutions import LaunchConfiguration, TextSubstitution
 from nav2_common.launch import ParseMultiRobotPose
 
 
+def _src_bringup_dir(bringup_dir):
+    workspace_root = os.path.normpath(
+        os.path.join(bringup_dir, "..", "..", "..", "..")
+    )
+    return os.path.join(
+        workspace_root, "src", "pb2025_sentry_nav", "pb2025_nav_bringup"
+    )
+
+
 def generate_launch_description():
     """
     Bring up the multi-robots with given launch arguments.
@@ -42,6 +51,8 @@ def generate_launch_description():
     # Get the launch directory
     bringup_dir = get_package_share_directory("pb2025_nav_bringup")
     launch_dir = os.path.join(bringup_dir, "launch")
+    src_bringup_dir = _src_bringup_dir(bringup_dir)
+    src_map_simulation_dir = os.path.join(src_bringup_dir, "map", "simulation")
 
     # Simulation settings
     world = LaunchConfiguration("world")
@@ -64,7 +75,7 @@ def generate_launch_description():
     declare_map_yaml_cmd = DeclareLaunchArgument(
         "map",
         default_value=[
-            TextSubstitution(text=os.path.join(bringup_dir, "map", "simulation", "")),
+            TextSubstitution(text=os.path.join(src_map_simulation_dir, "")),
             world,
             TextSubstitution(text=".yaml"),
         ],

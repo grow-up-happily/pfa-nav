@@ -26,10 +26,22 @@ from launch_ros.descriptions import ParameterFile
 from nav2_common.launch import RewrittenYaml
 
 
+def _src_bringup_dir(bringup_dir):
+    workspace_root = os.path.normpath(
+        os.path.join(bringup_dir, "..", "..", "..", "..")
+    )
+    return os.path.join(
+        workspace_root, "src", "pb2025_sentry_nav", "pb2025_nav_bringup"
+    )
+
+
 def generate_launch_description():
     # Get the launch directory
     bringup_dir = get_package_share_directory("pb2025_nav_bringup")
     launch_dir = os.path.join(bringup_dir, "launch")
+    src_bringup_dir = _src_bringup_dir(bringup_dir)
+    src_map_simulation_dir = os.path.join(src_bringup_dir, "map", "simulation")
+    src_pcd_simulation_dir = os.path.join(src_bringup_dir, "pcd", "simulation")
 
     # Create the launch configuration variables
     namespace = LaunchConfiguration("namespace")
@@ -90,7 +102,7 @@ def generate_launch_description():
     declare_map_yaml_cmd = DeclareLaunchArgument(
         "map",
         default_value=[
-            TextSubstitution(text=os.path.join(bringup_dir, "map", "simulation", "")),
+            TextSubstitution(text=os.path.join(src_map_simulation_dir, "")),
             world,
             TextSubstitution(text=".yaml"),
         ],
@@ -99,7 +111,7 @@ def generate_launch_description():
 
     declare_prior_pcd_file_cmd = DeclareLaunchArgument(
         "prior_pcd_file",
-        default_value=os.path.join(bringup_dir, "pcd", "simulation", "scans.pcd"),
+        default_value=os.path.join(src_pcd_simulation_dir, "scans.pcd"),
         description="Full path to prior pcd file to load. Override this when using a world-specific prior map.",
     )
 
@@ -155,12 +167,6 @@ def generate_launch_description():
         description="Whether to periodically save the SLAM map.",
     )
 
-    workspace_root = os.path.normpath(
-        os.path.join(bringup_dir, "..", "..", "..", "..")
-    )
-    src_map_simulation_dir = os.path.join(
-        workspace_root, "src", "pb2025_sentry_nav", "pb2025_nav_bringup", "map", "simulation"
-    )
     declare_auto_save_map_dir_cmd = DeclareLaunchArgument(
         "auto_save_map_dir",
         default_value=src_map_simulation_dir,
