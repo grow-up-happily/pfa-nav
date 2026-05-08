@@ -140,12 +140,9 @@ def generate_launch_description():
             {"use_sim_time": use_sim_time},
             {"file_name": prior_pcd_file},
             {"frame_id": "map"},
-            # NOTE: 不传 base_frame/lidar_frame, 让 prior_pcd_publisher 跳过 TF lift.
-            # 我们的 hero_to_sentry_map_converter.py(配 --source-lidar-mount)已把 PCD
-            # 离线提升到 base 系, 这里再用 URDF lift 一次会变成双重 lift.
-            # 如果以后切回喂原始(未提升的)point_lio PCD, 加回:
-            #   {"base_frame": "base_footprint"},
-            #   {"lidar_frame": "front_mid360"},
+            # Match small_gicp's prior map transform so RViz shows the same map used for relocalization.
+            {"base_frame": "base_footprint"},
+            {"lidar_frame": "front_mid360"},
             {"publish_period_sec": 1.0},
         ],
         arguments=["--ros-args", "--log-level", log_level],
