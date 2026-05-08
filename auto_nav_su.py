@@ -167,15 +167,15 @@ class AutoNavNode(Node):
         straight_timeout_extra=5.0,
         enable_extra_straight=False,
         extra_straight_wait_seconds=5.0,
-        cmd_vel_topic='/red_standard_robot1/cmd_vel',
+        cmd_vel_topic='/cmd_vel',
         map_frame='map',
         chassis_frame='chassis',
         velocity_frame='gimbal_yaw',
         yaw_log_distance=0.15,
-        tf_topic='/red_standard_robot1/tf',
-        tf_static_topic='/red_standard_robot1/tf_static',
-        straight_path_topic='/red_standard_robot1/auto_nav_straight_path',
-        waypoint_marker_topic='/red_standard_robot1/waypoint_markers',
+        tf_topic='/tf',
+        tf_static_topic='/tf_static',
+        straight_path_topic='/auto_nav_straight_path',
+        waypoint_marker_topic='/waypoint_markers',
         angle_diff_topic='/angle_diff',
     ):
         super().__init__('auto_nav_node')
@@ -211,9 +211,9 @@ class AutoNavNode(Node):
             raise ValueError("目标点列表为空")
         
         # 导航客户端
-        self.nav_ac = ActionClient(self, NavigateToPose, '/red_standard_robot1/navigate_to_pose')
+        self.nav_ac = ActionClient(self, NavigateToPose, '/navigate_to_pose')
         self.nav_through_poses_ac = ActionClient(
-            self, NavigateThroughPoses, '/red_standard_robot1/navigate_through_poses'
+            self, NavigateThroughPoses, '/navigate_through_poses'
         )
 
         self.map_frame = map_frame
@@ -1673,7 +1673,7 @@ def main():
     parser.add_argument(
         '--cmd-vel-topic',
         type=str,
-        default='/red_standard_robot1/cmd_vel',
+        default='/cmd_vel',
         help='直行校准时发布 Twist 的话题，默认发布到 fake_vel_transform 后的 /cmd_vel'
     )
     parser.add_argument(
@@ -1745,25 +1745,25 @@ def main():
     parser.add_argument(
         '--tf-topic',
         type=str,
-        default='/red_standard_robot1/tf',
+        default='/tf',
         help='方向检查日志使用的 TF 话题'
     )
     parser.add_argument(
         '--tf-static-topic',
         type=str,
-        default='/red_standard_robot1/tf_static',
+        default='/tf_static',
         help='方向检查日志使用的静态 TF 话题'
     )
     parser.add_argument(
         '--straight-path-topic',
         type=str,
-        default='/red_standard_robot1/auto_nav_straight_path',
+        default='/auto_nav_straight_path',
         help='RViz 显示 2-3 直线校准路径的 nav_msgs/Path 话题'
     )
     parser.add_argument(
         '--waypoint-marker-topic',
         type=str,
-        default='/red_standard_robot1/waypoint_markers',
+        default='/waypoint_markers',
         help='RViz 显示所有航点的 visualization_msgs/MarkerArray 话题'
     )
     parser.add_argument(
