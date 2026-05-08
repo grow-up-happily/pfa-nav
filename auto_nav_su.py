@@ -246,8 +246,8 @@ class AutoNavNode(Node):
                 UInt8, judge_topic, self.judge_callback, 10
             )
             self.get_logger().info(
-                f"已订阅 {judge_topic}: data=1 -> 航点 {self.judge_home_id}, "
-                f"data=2 -> 航点 {self.judge_remote_id}"
+                f"已订阅 {judge_topic}: data=0 -> 航点 {self.judge_home_id}, "
+                f"data=1 -> 航点 {self.judge_remote_id}"
             )
             if not order_was_provided:
                 self.get_logger().info("未指定 --order，等待 /judge 指令后开始导航")
@@ -509,9 +509,9 @@ class AutoNavNode(Node):
     def judge_callback(self, msg):
         """接收裁判指令：1 回 1 点，2 去 4 点。直行校准中忽略新指令。"""
         command = int(msg.data)
-        if command == 1:
+        if command == 0:
             target_id = self.judge_home_id
-        elif command == 2:
+        elif command == 1:
             target_id = self.judge_remote_id
         else:
             self.get_logger().warn(f"忽略 /judge 未知值: {command}")
@@ -573,10 +573,10 @@ class AutoNavNode(Node):
 
         if len(route_ids) == 1:
             self.current_idx = 0
-            self.judge_idle = True
+            self.judge_idle = False
             self.sending = False
             self.get_logger().info(
-                f"/judge={command}: 已在目标航点 {route_ids[0]}，等待下一条指令"
+                f"/judge={command}: 已在目标航点 {route_ids[0]}，继续发布该目标"
             )
             return
 
@@ -1044,11 +1044,11 @@ class AutoNavNode(Node):
             self.last_passed_waypoint_id = reached_id
             if self.judge_control_active and self.current_idx >= len(self.targets) - 1:
                 self.get_logger().info(
-                    f"/judge 路线已到达航点 {reached_id}，等待下一条指令"
+                    f"/judge 路线已到达航点 {reached_id}，继续发布该目标"
                 )
                 self.sending = False
                 self.retry_count = 0
-                self.judge_idle = True
+                self.judge_idle = False
                 return
             # 单目标点模式：到达后结束
             if not self.judge_control_active and len(self.targets) == 1:
@@ -1530,10 +1530,10 @@ class AutoNavNode(Node):
             )
             if self.judge_control_active and passed_idx >= len(self.targets) - 1:
                 self.current_idx = passed_idx
-                self.judge_idle = True
+                self.judge_idle = False
                 self.get_logger().info(
                     f"{pair[0]}->{pair[1]} 直线校准完成，已到达 /judge 目标 "
-                    f"{passed_wp_name}，实际前进 {traveled:.2f}m，等待下一条指令"
+                    f"{passed_wp_name}，实际前进 {traveled:.2f}m，继续发布该目标"
                 )
                 self.sending = False
                 return
@@ -1979,13 +1979,13 @@ def main():
         '--judge-home-id',
         type=int,
         default=1,
-        help='/judge=1 时回到的航点编号'
+        help='/judge=0 时回到的航点编号'
     )
     parser.add_argument(
         '--judge-remote-id',
         type=int,
         default=4,
-        help='/judge=2 时前往的航点编号'
+        help='/judge=1 时前往的航点编号'
     )
     args = parser.parse_args()
     
