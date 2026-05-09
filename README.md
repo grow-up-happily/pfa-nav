@@ -183,7 +183,9 @@ sh脚本使用：
         
     保存航点
     source install/setup.bash   
-    ros2 run wp_map_tools wp_saver (改目录 src/wp_saver.cpp)
+    (改目录 src/wp_saver.cpp)
+    ros2 run wp_map_tools wp_saver --red
+    ros2 run wp_map_tools wp_saver --blue
 
 实车导航
 
@@ -265,3 +267,7 @@ rviz不能连接 x11 dispaly显示
 
 # pfa-nav
 
+# 脚本使用
+
+python3 auto_nav_su.py --red
+python3 auto_nav_su.py --blue

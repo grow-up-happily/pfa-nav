@@ -1798,11 +1798,26 @@ class AutoNavNode(Node):
 
 def main():
     parser = argparse.ArgumentParser(description='自动循环导航 - 从文件读取目标点并循环导航')
-    parser.add_argument(
-        '--yaml', 
-        type=str, 
-        default='waypoints.yaml', 
+    waypoint_file_group = parser.add_mutually_exclusive_group()
+    waypoint_file_group.add_argument(
+        '--yaml',
+        type=str,
+        default='waypoints.yaml',
         help='航点 YAML 文件路径'
+    )
+    waypoint_file_group.add_argument(
+        '--red',
+        action='store_const',
+        dest='yaml',
+        const='waypoints_red.yaml',
+        help='读取 waypoints_red.yaml'
+    )
+    waypoint_file_group.add_argument(
+        '--blue',
+        action='store_const',
+        dest='yaml',
+        const='waypoints_blue.yaml',
+        help='读取 waypoints_blue.yaml'
     )
     parser.add_argument(
         '--order',

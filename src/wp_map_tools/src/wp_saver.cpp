@@ -1,8 +1,22 @@
 #include <chrono>
 #include <string>
 #include <memory>
+#include <cstdlib>
+#include <cstring>
 #include "rclcpp/rclcpp.hpp"
 #include "wp_map_tools/srv/save_waypoints.hpp"
+
+namespace
+{
+std::string defaultWaypointPath(const std::string& filename)
+{
+    const char* home = getenv("HOME");
+    std::string path = home != nullptr ? home : "";
+    path += "/sight_test/pfa-nav/";
+    path += filename;
+    return path;
+}
+}
 
 int main(int argc, char** argv)
 {
@@ -11,10 +25,8 @@ int main(int argc, char** argv)
 
     auto client = node->create_client<wp_map_tools::srv::SaveWaypoints>("waterplus/save_waypoints");
 
-    std::string strSaveFile;
-    const char* home = getenv("HOME");
-    strSaveFile = home;
-    strSaveFile += "/sight_test/pfa-nav/waypoints.yaml";
+    std::string strSaveFile = defaultWaypointPath("waypoints.yaml");
+    std::string color;
 
     for (int i = 1; i < argc; i++)
     {
@@ -24,6 +36,28 @@ int main(int argc, char** argv)
             {
                 strSaveFile = argv[i];
             }
+        }
+        else if (!strcmp(argv[i], "--red"))
+        {
+            if (color == "blue")
+            {
+                RCLCPP_ERROR(node->get_logger(), "--red and --blue cannot be used together");
+                rclcpp::shutdown();
+                return 1;
+            }
+            color = "red";
+            strSaveFile = defaultWaypointPath("waypoints_red.yaml");
+        }
+        else if (!strcmp(argv[i], "--blue"))
+        {
+            if (color == "red")
+            {
+                RCLCPP_ERROR(node->get_logger(), "--red and --blue cannot be used together");
+                rclcpp::shutdown();
+                return 1;
+            }
+            color = "blue";
+            strSaveFile = defaultWaypointPath("waypoints_blue.yaml");
         }
     }
 
