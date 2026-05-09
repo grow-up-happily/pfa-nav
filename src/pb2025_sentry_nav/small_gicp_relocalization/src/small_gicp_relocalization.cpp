@@ -41,6 +41,7 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->declare_parameter("lidar_frame", "");
   this->declare_parameter("prior_pcd_file", "");
   this->declare_parameter("init_pose", std::vector<double>{0., 0., 0., 0., 0., 0.});
+  this->declare_parameter("old_lidar_pose", std::vector<double>{});
 
   this->get_parameter("num_threads", num_threads_);
   this->get_parameter("num_neighbors", num_neighbors_);
@@ -54,6 +55,7 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->get_parameter("lidar_frame", lidar_frame_);
   this->get_parameter("prior_pcd_file", prior_pcd_file_);
   this->get_parameter("init_pose", init_pose_);
+  this->get_parameter("old_lidar_pose", old_lidar_pose_);
 
   // [x, y, z, roll, pitch, yaw] - init_pose parameters
   if (!init_pose_.empty() && init_pose_.size() >= 6) {
@@ -112,6 +114,19 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
     std::bind(&SmallGicpRelocalizationNode::publishTransform, this));
 }
 
+Eigen::Affine3d SmallGicpRelocalizationNode::poseVectorToAffine(
+  const std::vector<double> & pose) const
+{
+  Eigen::Affine3d transform = Eigen::Affine3d::Identity();
+  transform.translation() << pose[0], pose[1], pose[2];
+  transform.linear() =
+    (Eigen::AngleAxisd(pose[5], Eigen::Vector3d::UnitZ()) *
+     Eigen::AngleAxisd(pose[4], Eigen::Vector3d::UnitY()) *
+     Eigen::AngleAxisd(pose[3], Eigen::Vector3d::UnitX()))
+      .toRotationMatrix();
+  return transform;
+}
+
 void SmallGicpRelocalizationNode::loadGlobalMap(const std::string & file_name)
 {
   if (pcl::io::loadPCDFile<pcl::PointXYZ>(file_name, *global_map_) == -1) {
@@ -120,24 +135,41 @@ void SmallGicpRelocalizationNode::loadGlobalMap(const std::string & file_name)
   }
   RCLCPP_INFO(this->get_logger(), "Loaded global map with %zu points", global_map_->points.size());
 
-  // NOTE: Transform global pcd_map (based on `lidar_odom` frame) to the `odom` frame
-  Eigen::Affine3d odom_to_lidar_odom;
-  while (true) {
-    try {
-      auto tf_stamped = tf_buffer_->lookupTransform(
-        base_frame_, lidar_frame_, this->now(), rclcpp::Duration::from_seconds(1.0));
-      odom_to_lidar_odom = tf2::transformToEigen(tf_stamped.transform);
-      RCLCPP_INFO_STREAM(
-        this->get_logger(), "odom_to_lidar_odom: translation = "
-                              << odom_to_lidar_odom.translation().transpose() << ", rpy = "
-                              << odom_to_lidar_odom.rotation().eulerAngles(0, 1, 2).transpose());
-      break;
-    } catch (tf2::TransformException & ex) {
-      RCLCPP_WARN(this->get_logger(), "TF lookup failed: %s Retrying...", ex.what());
-      rclcpp::sleep_for(std::chrono::seconds(1));
+  Eigen::Affine3d pcd_to_base_frame;
+  if (!old_lidar_pose_.empty()) {
+    if (old_lidar_pose_.size() < 6) {
+      RCLCPP_ERROR(
+        this->get_logger(), "old_lidar_pose must be [x, y, z, roll, pitch, yaw]");
+      global_map_->clear();
+      return;
+    }
+    pcd_to_base_frame = poseVectorToAffine(old_lidar_pose_);
+    RCLCPP_INFO_STREAM(
+      this->get_logger(), "Using configured old_lidar_pose: translation = "
+                            << pcd_to_base_frame.translation().transpose() << ", rpy = "
+                            << pcd_to_base_frame.rotation().eulerAngles(0, 1, 2).transpose());
+  } else {
+    while (true) {
+      try {
+        auto tf_stamped = tf_buffer_->lookupTransform(
+          base_frame_, lidar_frame_, this->now(), rclcpp::Duration::from_seconds(1.0));
+        pcd_to_base_frame = tf2::transformToEigen(tf_stamped.transform);
+        RCLCPP_INFO_STREAM(
+          this->get_logger(), "Using current TF " << base_frame_ << " <- " << lidar_frame_
+                                                  << ": translation = "
+                                                  << pcd_to_base_frame.translation().transpose()
+                                                  << ", rpy = "
+                                                  << pcd_to_base_frame.rotation()
+                                                       .eulerAngles(0, 1, 2)
+                                                       .transpose());
+        break;
+      } catch (tf2::TransformException & ex) {
+        RCLCPP_WARN(this->get_logger(), "TF lookup failed: %s Retrying...", ex.what());
+        rclcpp::sleep_for(std::chrono::seconds(1));
+      }
     }
   }
-  pcl::transformPointCloud(*global_map_, *global_map_, odom_to_lidar_odom);
+  pcl::transformPointCloud(*global_map_, *global_map_, pcd_to_base_frame);
 }
 
 void SmallGicpRelocalizationNode::registeredPcdCallback(

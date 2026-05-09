@@ -60,10 +60,10 @@ point_lio:
       plane_thr: 0.1                                    # 0.05, the threshold for plane criteria, the smaller, the flatter a plane
       match_s: 81.0
       ivox_grid_resolution: 0.5
-      gravity: [ 0.0, -4.9, -8.487047153776548 ]        # gravity to be aligned # rpy = [0, pi/6, 0]
-      gravity_init: [ 0.0, -4.9, -8.487047153776548 ]   # preknown gravity in the first IMU body frame, use when imu_en is False or start from a non-stationary state
-      # gravity: [  0.0017580259591341019, 0.012590263038873672, 0.9944856762886047 ]            # gravity to be aligned
-      # gravity_init: [  0.0017580259591341019, 0.012590263038873672, 0.9944856762886047 ] 
+      # gravity: [ 0.0, -4.9, -8.487047153776548 ]        # gravity to be aligned # rpy = [0, pi/6, 0]
+      # gravity_init: [ 0.0, -4.9, -8.487047153776548 ]   # preknown gravity in the first IMU body frame, use when imu_en is False or start from a non-stationary state
+      gravity: [ 0.0,-8.543298734528603 ,-4.801254704021634]            # gravity to be aligned
+      gravity_init: [ 0.0,-8.543298734528603 ,-4.801254704021634 ]
       extrinsic_T: [ 0.0, 0.0, 0.0 ]
       extrinsic_R: [ 1.0, 0.0, 0.0,
                      0.0, 1.0, 0.0,
@@ -172,10 +172,15 @@ small_gicp_relocalization:
     odom_frame: "odom"
     base_frame: "base_footprint"
     robot_base_frame: "gimbal_yaw"
-    lidar_frame: "front_mid360"
+    lidar_frame: "front_mid360"           # pi/6 0.523599 ，pi/3 1.047198
+    old_lidar_pose: [0.16, 0.0, 0.18, 0.0 , 0.0, 0.0]  # [x, y, z, roll, pitch, yaw], mapping-time base->lidar pose used by saved PCD
     init_pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]   # [x, y, z, roll, pitch, yaw]
     # The prior_pcd_file does not need to be specified since it going to be set by defaults in launch.
     # prior_pcd_file: ""
+
+prior_pcd_publisher:
+  ros__parameters:
+    old_lidar_pose: [0.16, 0.0, 0.18, 0.0, 0.0, 0.0]
 
 pointcloud_to_laserscan:
   ros__parameters:

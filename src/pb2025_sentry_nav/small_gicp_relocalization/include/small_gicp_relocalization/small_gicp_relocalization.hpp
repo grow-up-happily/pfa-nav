@@ -19,6 +19,7 @@
 #include <string>
 #include <vector>
 
+#include "Eigen/Geometry"
 #include "geometry_msgs/msg/pose_with_covariance_stamped.hpp"
 #include "pcl/io/pcd_io.h"
 #include "rclcpp/rclcpp.hpp"
@@ -42,6 +43,7 @@ public:
 
 private:
   void registeredPcdCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg);
+  Eigen::Affine3d poseVectorToAffine(const std::vector<double> & pose) const;
   void loadGlobalMap(const std::string & file_name);
   void performRegistration();
   void publishTransform();
@@ -56,6 +58,7 @@ private:
   float registered_leaf_size_;
   float max_dist_sq_;
   std::vector<double> init_pose_;
+  std::vector<double> old_lidar_pose_;
 
   std::string map_frame_;
   std::string odom_frame_;

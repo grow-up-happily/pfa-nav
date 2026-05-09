@@ -14,6 +14,7 @@ from threading import Thread
 
 import numpy as np
 import rclpy
+from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.duration import Duration
 from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
 from rclpy.node import Node
@@ -173,6 +174,50 @@ def transform_xyz(arr, transform):
     return out
 
 
+def rpy_to_matrix(roll, pitch, yaw):
+    rx = np.array(
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, np.cos(roll), -np.sin(roll)],
+            [0.0, np.sin(roll), np.cos(roll)],
+        ],
+        dtype=np.float64,
+    )
+    ry = np.array(
+        [
+            [np.cos(pitch), 0.0, np.sin(pitch)],
+            [0.0, 1.0, 0.0],
+            [-np.sin(pitch), 0.0, np.cos(pitch)],
+        ],
+        dtype=np.float64,
+    )
+    rz = np.array(
+        [
+            [np.cos(yaw), -np.sin(yaw), 0.0],
+            [np.sin(yaw), np.cos(yaw), 0.0],
+            [0.0, 0.0, 1.0],
+        ],
+        dtype=np.float64,
+    )
+    return rz @ ry @ rx
+
+
+def transform_xyz_pose(arr, pose):
+    for name in ("x", "y", "z"):
+        if name not in arr.dtype.names:
+            raise ValueError(f"PCD field '{name}' is required for transform")
+
+    out = arr.copy()
+    translation = np.array(pose[:3], dtype=np.float64)
+    rotation = rpy_to_matrix(pose[3], pose[4], pose[5])
+    xyz = np.column_stack((out["x"], out["y"], out["z"])).astype(np.float64, copy=False)
+    xyz = xyz @ rotation.T + translation
+    out["x"] = xyz[:, 0]
+    out["y"] = xyz[:, 1]
+    out["z"] = xyz[:, 2]
+    return out
+
+
 class PriorPCDPublisher(Node):
     def __init__(self):
         super().__init__("prior_pcd_publisher")
@@ -181,6 +226,11 @@ class PriorPCDPublisher(Node):
         self.declare_parameter("frame_id", "map")
         self.declare_parameter("base_frame", "")
         self.declare_parameter("lidar_frame", "")
+        self.declare_parameter(
+            "old_lidar_pose",
+            [],
+            descriptor=ParameterDescriptor(dynamic_typing=True),
+        )
         self.declare_parameter("publish_period_sec", 1.0)
         self.declare_parameter("transform_timeout_sec", 1.0)
 
@@ -188,6 +238,7 @@ class PriorPCDPublisher(Node):
         frame_id = self.get_parameter("frame_id").get_parameter_value().string_value
         base_frame = self.get_parameter("base_frame").get_parameter_value().string_value
         lidar_frame = self.get_parameter("lidar_frame").get_parameter_value().string_value
+        old_lidar_pose = list(self.get_parameter("old_lidar_pose").value)
         period = self.get_parameter("publish_period_sec").get_parameter_value().double_value
         timeout_sec = (
             self.get_parameter("transform_timeout_sec").get_parameter_value().double_value
@@ -204,7 +255,21 @@ class PriorPCDPublisher(Node):
             self.get_logger().error(f"Failed to load PCD: {exc}")
             raise SystemExit(3) from exc
 
-        if base_frame and lidar_frame:
+        if old_lidar_pose:
+            if len(old_lidar_pose) < 6:
+                self.get_logger().error(
+                    "old_lidar_pose must be [x, y, z, roll, pitch, yaw]"
+                )
+                raise SystemExit(4)
+            old_lidar_pose = [float(v) for v in old_lidar_pose[:6]]
+            arr = transform_xyz_pose(arr, old_lidar_pose)
+            self.get_logger().info(
+                "Applied configured old_lidar_pose to prior map: "
+                f"translation=({old_lidar_pose[0]:.6f}, {old_lidar_pose[1]:.6f}, "
+                f"{old_lidar_pose[2]:.6f}), rpy=({old_lidar_pose[3]:.6f}, "
+                f"{old_lidar_pose[4]:.6f}, {old_lidar_pose[5]:.6f})"
+            )
+        elif base_frame and lidar_frame:
             tf_buffer = Buffer(node=self)
             TransformListener(tf_buffer, self)
             tf_executor = SingleThreadedExecutor()
