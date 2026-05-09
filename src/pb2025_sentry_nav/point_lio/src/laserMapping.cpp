@@ -8,6 +8,7 @@
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
 
+#include <filesystem>
 #include <nav_msgs/msg/odometry.hpp>
 #include <nav_msgs/msg/path.hpp>
 
@@ -179,6 +180,29 @@ void publish_init_map(
 
 PointCloudXYZI::Ptr pcl_wait_pub(new PointCloudXYZI(500000, 1));
 PointCloudXYZI::Ptr pcl_wait_save(new PointCloudXYZI());
+
+void prune_old_pcd_snapshots()
+{
+  if (pcd_save_max_saved_files <= 0 || pcd_index <= pcd_save_max_saved_files) {
+    return;
+  }
+
+  const int old_index = pcd_index - pcd_save_max_saved_files;
+  const std::filesystem::path old_points_path =
+    std::filesystem::path(ROOT_DIR) / "PCD" / ("scans_" + std::to_string(old_index) + ".pcd");
+
+  std::error_code ec;
+  const bool removed = std::filesystem::remove(old_points_path, ec);
+  if (ec) {
+    RCLCPP_WARN(
+      LOGGER, "Failed to remove old 3D point cloud snapshot %s: %s",
+      old_points_path.c_str(), ec.message().c_str());
+  } else if (removed) {
+    RCLCPP_INFO(
+      LOGGER, "Removed old 3D point cloud snapshot: %s", old_points_path.c_str());
+  }
+}
+
 void publish_frame_world(
   const rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr & pubLaserCloudFullRes)
 {
@@ -210,6 +234,7 @@ void publish_frame_world(
         int ret = pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
         if (ret == 0) {
           RCLCPP_INFO(LOGGER, "Saved accumulated 3D point cloud snapshot: %s", all_points_dir.c_str());
+          prune_old_pcd_snapshots();
         } else {
           RCLCPP_ERROR(
             LOGGER, "Failed to save accumulated 3D point cloud snapshot: %s (code %d)",

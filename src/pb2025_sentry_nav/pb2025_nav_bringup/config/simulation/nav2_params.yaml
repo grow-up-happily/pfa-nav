@@ -82,6 +82,7 @@ point_lio:
       pcd_save_en: False
       interval: -1                                      # how many LiDAR frames saved in each pcd file;
                                                         # -1 : all frames will be saved in ONE pcd file, may lead to memory crash when having too much frames.
+      max_saved_files: 20                               # keep only the latest N accumulated PCD snapshots (scans_N.pcd); <=0 disables pruning.
 
 loam_interface:
   ros__parameters:
