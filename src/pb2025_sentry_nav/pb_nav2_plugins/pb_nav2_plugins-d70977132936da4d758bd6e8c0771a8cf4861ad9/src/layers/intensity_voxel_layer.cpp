@@ -14,6 +14,7 @@
 
 #include "pb_nav2_plugins/layers/intensity_voxel_layer.hpp"
 
+#include <unordered_map>
 #include <vector>
 
 #include "sensor_msgs/point_cloud2_iterator.hpp"
@@ -50,6 +51,17 @@ void IntensityVoxelLayer::onInitialize()
     node->declare_parameter(name_ + ".unknown_threshold", 15) + (VOXEL_BITS - size_z_);
   mark_threshold_ = node->declare_parameter(name_ + ".mark_threshold", 0);
   publish_voxel_ = node->declare_parameter(name_ + ".publish_voxel_map", false);
+  noise_filter_enabled_ = node->declare_parameter(name_ + ".noise_filter_enabled", false);
+
+  int noise_filter_min_cluster_cells =
+    node->declare_parameter(name_ + ".noise_filter_min_cluster_cells", 5);
+  if (noise_filter_min_cluster_cells < 1) {
+    RCLCPP_WARN(
+      node->get_logger(),
+      "Parameter %s.noise_filter_min_cluster_cells must be at least 1. Using 1.", name_.c_str());
+    noise_filter_min_cluster_cells = 1;
+  }
+  noise_filter_min_cluster_cells_ = static_cast<unsigned int>(noise_filter_min_cluster_cells);
 
   if (publish_voxel_) {
     voxel_pub_ = node->create_publisher<nav2_msgs::msg::VoxelGrid>("voxel_grid", 1);
@@ -124,6 +136,8 @@ void IntensityVoxelLayer::updateBounds(
   // update the global current status
   current_ = current;
 
+  std::vector<ObstacleCell> obstacle_cells;
+
   // place the new obstacles into a priority queue... each with a priority of zero to begin with
   for (const auto & obs : observations) {
     double sq_obstacle_max_range = obs.obstacle_max_range_ * obs.obstacle_max_range_;
@@ -170,10 +184,19 @@ void IntensityVoxelLayer::updateBounds(
       if (voxel_grid_.markVoxelInMap(mx, my, mz, mark_threshold_)) {
         unsigned int index = getIndex(mx, my);
 
-        costmap_[index] = LETHAL_OBSTACLE;
-        touch(static_cast<double>(px), static_cast<double>(py), min_x, min_y, max_x, max_y);
+        if (noise_filter_enabled_) {
+          obstacle_cells.push_back(
+            {mx, my, index, static_cast<double>(px), static_cast<double>(py)});
+        } else {
+          costmap_[index] = LETHAL_OBSTACLE;
+          touch(static_cast<double>(px), static_cast<double>(py), min_x, min_y, max_x, max_y);
+        }
       }
     }
+  }
+
+  if (noise_filter_enabled_) {
+    markFilteredObstacleCells(obstacle_cells, min_x, min_y, max_x, max_y);
   }
 
   if (publish_voxel_) {
@@ -198,6 +221,94 @@ void IntensityVoxelLayer::updateBounds(
   }
 
   updateFootprint(robot_x, robot_y, robot_yaw, min_x, min_y, max_x, max_y);
+}
+
+void IntensityVoxelLayer::markFilteredObstacleCells(
+  const std::vector<ObstacleCell> & obstacle_cells, double * min_x, double * min_y, double * max_x,
+  double * max_y)
+{
+  if (obstacle_cells.empty()) {
+    return;
+  }
+
+  std::vector<ObstacleCell> unique_cells;
+  unique_cells.reserve(obstacle_cells.size());
+
+  std::unordered_map<unsigned int, std::size_t> cell_lookup;
+  cell_lookup.reserve(obstacle_cells.size());
+
+  for (const auto & cell : obstacle_cells) {
+    if (cell_lookup.find(cell.index) != cell_lookup.end()) {
+      continue;
+    }
+
+    cell_lookup.emplace(cell.index, unique_cells.size());
+    unique_cells.push_back(cell);
+  }
+
+  std::vector<bool> visited(unique_cells.size(), false);
+  std::vector<std::size_t> component;
+  std::vector<std::size_t> open_cells;
+
+  for (std::size_t start = 0; start < unique_cells.size(); ++start) {
+    if (visited[start]) {
+      continue;
+    }
+
+    component.clear();
+    open_cells.clear();
+    open_cells.push_back(start);
+    visited[start] = true;
+
+    while (!open_cells.empty()) {
+      std::size_t current = open_cells.back();
+      open_cells.pop_back();
+      component.push_back(current);
+
+      const auto & cell = unique_cells[current];
+      const int cell_mx = static_cast<int>(cell.mx);
+      const int cell_my = static_cast<int>(cell.my);
+
+      for (int dx = -1; dx <= 1; ++dx) {
+        for (int dy = -1; dy <= 1; ++dy) {
+          if (dx == 0 && dy == 0) {
+            continue;
+          }
+
+          const int nx = cell_mx + dx;
+          const int ny = cell_my + dy;
+          if (nx < 0 || ny < 0) {
+            continue;
+          }
+
+          const unsigned int neighbor_mx = static_cast<unsigned int>(nx);
+          const unsigned int neighbor_my = static_cast<unsigned int>(ny);
+          if (neighbor_mx >= size_x_ || neighbor_my >= size_y_) {
+            continue;
+          }
+
+          const unsigned int neighbor_index = getIndex(neighbor_mx, neighbor_my);
+          auto neighbor = cell_lookup.find(neighbor_index);
+          if (neighbor == cell_lookup.end() || visited[neighbor->second]) {
+            continue;
+          }
+
+          visited[neighbor->second] = true;
+          open_cells.push_back(neighbor->second);
+        }
+      }
+    }
+
+    if (component.size() < static_cast<std::size_t>(noise_filter_min_cluster_cells_)) {
+      continue;
+    }
+
+    for (std::size_t cell_index : component) {
+      const auto & cell = unique_cells[cell_index];
+      costmap_[cell.index] = LETHAL_OBSTACLE;
+      touch(cell.wx, cell.wy, min_x, min_y, max_x, max_y);
+    }
+  }
 }
 
 void IntensityVoxelLayer::updateOrigin(double new_origin_x, double new_origin_y)

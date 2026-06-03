@@ -15,6 +15,8 @@
 #ifndef PB_NAV2_PLUGINS__LAYERS__INTENSITY_VOXEL_LAYER_HPP_
 #define PB_NAV2_PLUGINS__LAYERS__INTENSITY_VOXEL_LAYER_HPP_
 
+#include <vector>
+
 #include "laser_geometry/laser_geometry.hpp"
 #include "message_filters/subscriber.h"
 #include "nav2_costmap_2d/layer.hpp"
@@ -61,12 +63,26 @@ protected:
     double * max_x, double * max_y);
 
 private:
+  struct ObstacleCell
+  {
+    unsigned int mx;
+    unsigned int my;
+    unsigned int index;
+    double wx;
+    double wy;
+  };
+
+  void markFilteredObstacleCells(
+    const std::vector<ObstacleCell> & obstacle_cells, double * min_x, double * min_y,
+    double * max_x, double * max_y);
+
   bool publish_voxel_;
+  bool noise_filter_enabled_;
   rclcpp::Publisher<nav2_msgs::msg::VoxelGrid>::SharedPtr voxel_pub_;
   nav2_voxel_grid::VoxelGrid voxel_grid_;
   double z_resolution_, origin_z_;
   double min_obstacle_intensity_, max_obstacle_intensity_;
-  unsigned int unknown_threshold_, mark_threshold_, size_z_;
+  unsigned int unknown_threshold_, mark_threshold_, size_z_, noise_filter_min_cluster_cells_;
   rclcpp::Clock::SharedPtr clock_;
 
   inline bool worldToMap3DFloat(

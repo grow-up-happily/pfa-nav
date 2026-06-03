@@ -157,4 +157,22 @@ src/pb2025_sentry_nav/pb2025_nav_bringup/config/reality/mid360_user_config.json 
 ros2 run rqt_tf_tree rqt_tf_tree --ros-args -r /tf:=tf -r /tf_static:=tf_static -r __ns:=/red_standard_robot1
 ```
 
+## 代码改动记录
+
+### 2026-06-03 Nav2 IntensityVoxelLayer 孤立噪声过滤器
+
+改动文件：
+
+- `src/pb2025_sentry_nav/pb_nav2_plugins/pb_nav2_plugins-d70977132936da4d758bd6e8c0771a8cf4861ad9/include/pb_nav2_plugins/layers/intensity_voxel_layer.hpp`
+- `src/pb2025_sentry_nav/pb_nav2_plugins/pb_nav2_plugins-d70977132936da4d758bd6e8c0771a8cf4861ad9/src/layers/intensity_voxel_layer.cpp`
+
+大致改动：
+
+- 改动状态：未经过仿真或实车测试。
+- 此次添加代码主要是为了把 `docs/superpowers/specs/2026-04-26-nav2-isolated-noise-filter-design.md` 中记录的计划收束到现有代码中，避免该计划文件长期只是悬空记录。
+- 在 `IntensityVoxelLayer` 中加入孤立点和小簇障碍噪声过滤逻辑。
+- 新增参数 `noise_filter_enabled`，默认值为 `false`，因此当前 Nav2 配置不写该参数时不会启用新逻辑，也不会影响现有功能。
+- 新增参数 `noise_filter_min_cluster_cells`，默认值为 `5`，用于控制保留障碍连通块所需的最小栅格数量。
+- 启用过滤后，点云候选障碍格会先按二维 8 连通域分组，小于阈值的连通块不会写入 costmap。
+- 未改动 `simulation/nav2_params.yaml` 和 `reality/nav2_params.yaml`，所以该功能目前只是代码可用，默认不生效。
 
