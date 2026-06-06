@@ -24,6 +24,31 @@ ros2 launch pb2025_nav_bringup rm_navigation_simulation_launch.py world:=rmuc_20
 ros2 launch pb2025_nav_bringup rm_navigation_simulation_launch.py slam:=True
 ```
 
+一键仿真建图并覆盖仿真先验导航的 `game` 地图：
+
+```bash
+./sim_slam_install_map.sh rmuc_2026
+```
+
+脚本会先用 `rmuc_2026` 启动 Gazebo 仿真世界，再启动仿真 SLAM；跑完需要建图的区域后按 `Ctrl+C`，它会保存最终 `.pgm/.yaml`，关闭建图让 point_lio 写出最新 `.pcd`，然后统一改名并覆盖安装到：
+
+```text
+src/pb2025_sentry_nav/pb2025_nav_bringup/map/simulation/game.yaml
+src/pb2025_sentry_nav/pb2025_nav_bringup/map/simulation/game.pgm
+src/pb2025_sentry_nav/pb2025_nav_bringup/pcd/simulation/scans.pcd
+src/pb2025_sentry_nav/pb2025_nav_bringup/pcd/simulation/game.pcd
+```
+
+安装前会把已有同名文件备份为 `.bak_<时间戳>`。
+
+建图归位后，一键启动 Gazebo + 仿真先验导航模式：
+
+```bash
+./sim_prior_nav_game.sh rmuc_2026
+```
+
+这里 `rmuc_2026` 是 Gazebo 世界，导航默认读取 `world:=game`，即刚才覆盖安装的 `game.yaml` 和 `pcd/simulation/scans.pcd`。
+
 仿真车运动控制：
 
 ```bash
@@ -40,6 +65,15 @@ ros2 run nav2_map_server map_saver_cli -f <YOUR_MAP_NAME> --ros-args -r __ns:=/r
 
 ```bash
 ros2 launch pb2025_nav_bringup rm_navigation_reality_launch.py slam:=True use_robot_state_pub:=True
+```
+
+开机后旁路录制 MID360 建图输入的脚本、systemd 安装脚本和用法说明都集中在 `autostart_mid360_record/`，详见 `autostart_mid360_record/README.md`。
+
+离线重跑录制包来建图时，不要再启动真实 Livox driver：
+
+```bash
+ros2 launch pb2025_nav_bringup rm_navigation_reality_launch.py slam:=True use_robot_state_pub:=True use_livox_driver:=False use_sim_time:=True
+ros2 bag play <BAG_DIR> --clock
 ```
 
 ## 实车地图归位
@@ -175,4 +209,3 @@ ros2 run rqt_tf_tree rqt_tf_tree --ros-args -r /tf:=tf -r /tf_static:=tf_static 
 - 新增参数 `noise_filter_min_cluster_cells`，默认值为 `5`，用于控制保留障碍连通块所需的最小栅格数量。
 - 启用过滤后，点云候选障碍格会先按二维 8 连通域分组，小于阈值的连通块不会写入 costmap。
 - 未改动 `simulation/nav2_params.yaml` 和 `reality/nav2_params.yaml`，所以该功能目前只是代码可用，默认不生效。
-

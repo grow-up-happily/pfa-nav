@@ -56,6 +56,7 @@ def generate_launch_description():
     use_respawn = LaunchConfiguration("use_respawn")
     rviz_config_file = LaunchConfiguration("rviz_config_file")
     use_robot_state_pub = LaunchConfiguration("use_robot_state_pub")
+    use_livox_driver = LaunchConfiguration("use_livox_driver")
     use_rviz = LaunchConfiguration("use_rviz")
     auto_save_map = LaunchConfiguration("auto_save_map")
     auto_save_map_dir = LaunchConfiguration("auto_save_map_dir")
@@ -140,6 +141,12 @@ def generate_launch_description():
         description="Whether to start the robot state publisher",
     )
 
+    declare_use_livox_driver_cmd = DeclareLaunchArgument(
+        "use_livox_driver",
+        default_value="True",
+        description="Whether to start livox_ros_driver2. Set False when replaying a rosbag.",
+    )
+
     declare_rviz_config_file_cmd = DeclareLaunchArgument(
         "rviz_config_file",
         default_value=os.path.join(bringup_dir, "rviz", "nav2_default_view.rviz"),
@@ -210,6 +217,7 @@ def generate_launch_description():
         name="livox_ros_driver2",
         output="screen",
         namespace=namespace,
+        condition=IfCondition(use_livox_driver),
         parameters=[configured_params],
     )
 
@@ -266,6 +274,7 @@ def generate_launch_description():
     ld.add_action(declare_use_composition_cmd)
     ld.add_action(declare_rviz_config_file_cmd)
     ld.add_action(declare_use_robot_state_pub_cmd)
+    ld.add_action(declare_use_livox_driver_cmd)
     ld.add_action(declare_use_rviz_cmd)
     ld.add_action(declare_use_respawn_cmd)
     ld.add_action(declare_auto_save_map_cmd)

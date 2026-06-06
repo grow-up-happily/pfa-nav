@@ -1,0 +1,21 @@
+[Unit]
+Description=Passive MID360 rosbag recorder
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+WorkingDirectory=__WORKSPACE__
+Environment=WORKSPACE=__WORKSPACE__
+Environment=BAG_ROOT=__WORKSPACE__/ros2_bag/mid360_pointcloud
+Environment=ROS_LOG_DIR=__WORKSPACE__/log/ros
+Environment=RECORD_MODE=debug
+ExecStart=__WORKSPACE__/autostart_mid360_record/mid360_mapping_record.sh
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
