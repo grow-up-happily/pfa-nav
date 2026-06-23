@@ -2,6 +2,10 @@
 
 这个目录只负责实车 MID360 原始消息旁路录制，不启动 Livox driver，不启动建图/导航。
 
+## 改动状态
+
+初步测试通过。
+
 ## 文件
 
 - `mid360_mapping_record.sh`: 录包脚本，默认 `RECORD_MODE=debug`，等待 Livox topic 后录制点云、IMU、速度输出和 TF。
