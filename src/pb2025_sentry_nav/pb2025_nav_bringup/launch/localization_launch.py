@@ -18,7 +18,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, GroupAction, SetEnvironmentVariable
-from launch.conditions import IfCondition
+from launch.conditions import IfCondition, UnlessCondition
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import LoadComposableNodes, Node
 from launch_ros.descriptions import ComposableNode, ParameterFile
@@ -40,6 +40,7 @@ def generate_launch_description():
     container_name_full = (namespace, "/", container_name)
     use_respawn = LaunchConfiguration("use_respawn")
     log_level = LaunchConfiguration("log_level")
+    mapless = LaunchConfiguration("mapless")
 
     lifecycle_nodes = ["map_server"]
 
@@ -64,6 +65,12 @@ def generate_launch_description():
 
     declare_namespace_cmd = DeclareLaunchArgument(
         "namespace", default_value="", description="Top-level namespace"
+    )
+
+    declare_mapless_cmd = DeclareLaunchArgument(
+        "mapless",
+        default_value="False",
+        description="Disable map server, prior PCD publisher, and small-GICP relocalization",
     )
 
     declare_map_yaml_cmd = DeclareLaunchArgument(
@@ -135,6 +142,7 @@ def generate_launch_description():
         executable="prior_pcd_publisher.py",
         name="prior_pcd_publisher",
         output="screen",
+        condition=UnlessCondition(mapless),
         parameters=[
             configured_params,
             {"use_sim_time": use_sim_time},
@@ -176,6 +184,7 @@ def generate_launch_description():
                 executable="map_server",
                 name="map_server",
                 output="screen",
+                condition=UnlessCondition(mapless),
                 respawn=use_respawn,
                 respawn_delay=2.0,
                 parameters=[configured_params],
@@ -186,6 +195,7 @@ def generate_launch_description():
                 executable="small_gicp_relocalization_node",
                 name="small_gicp_relocalization",
                 output="screen",
+                condition=UnlessCondition(mapless),
                 respawn=use_respawn,
                 respawn_delay=2.0,
                 parameters=[configured_params, {"prior_pcd_file": prior_pcd_file}],
@@ -196,6 +206,7 @@ def generate_launch_description():
                 executable="lifecycle_manager",
                 name="lifecycle_manager_localization",
                 output="screen",
+                condition=UnlessCondition(mapless),
                 arguments=["--ros-args", "--log-level", log_level],
                 parameters=[
                     {"use_sim_time": use_sim_time},
@@ -206,7 +217,7 @@ def generate_launch_description():
         ],
     )
 
-    load_composable_nodes = LoadComposableNodes(
+    load_composable_sensor_nodes = LoadComposableNodes(
         condition=IfCondition(use_composition),
         target_container=container_name_full,
         composable_node_descriptions=[
@@ -222,6 +233,15 @@ def generate_launch_description():
                 name="loam_interface",
                 parameters=[configured_params],
             ),
+        ],
+    )
+
+    load_composable_map_nodes = LoadComposableNodes(
+        condition=IfCondition(
+            PythonExpression([use_composition, " and not ", mapless])
+        ),
+        target_container=container_name_full,
+        composable_node_descriptions=[
             ComposableNode(
                 package="nav2_map_server",
                 plugin="nav2_map_server::MapServer",
@@ -258,6 +278,7 @@ def generate_launch_description():
 
     # Declare the launch options
     ld.add_action(declare_namespace_cmd)
+    ld.add_action(declare_mapless_cmd)
     ld.add_action(declare_map_yaml_cmd)
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_prior_pcd_file_cmd)
@@ -272,6 +293,7 @@ def generate_launch_description():
     ld.add_action(start_point_lio_node)
     ld.add_action(start_prior_pcd_publisher_node)
     ld.add_action(load_nodes)
-    ld.add_action(load_composable_nodes)
+    ld.add_action(load_composable_sensor_nodes)
+    ld.add_action(load_composable_map_nodes)
 
     return ld

@@ -1,0 +1,47 @@
+Frame_Id: odom
+Waypoints_Num: 4
+Route_Order: [1, 2, 3, 4]
+
+# Initial candidate route copied from the repository's recorded competition
+# waypoints. It is valid only when Point-LIO's odom origin matches the pose used
+# while recording these points. Refine it with real-robot repeatability tests.
+Waypoint_1:
+  Type: Waypoint
+  Name: ground_route_1
+  Pos_x: -1.2505
+  Pos_y: -5.90247
+  Pos_z: 0.0
+  Ori_x: 0.0
+  Ori_y: 0.0
+  Ori_z: -0.717293
+  Ori_w: 0.696772
+Waypoint_2:
+  Type: Waypoint
+  Name: ground_route_2
+  Pos_x: 2.07827
+  Pos_y: -6.34058
+  Pos_z: 0.0
+  Ori_x: 0.0
+  Ori_y: 0.0
+  Ori_z: -0.0131356
+  Ori_w: 0.999914
+Waypoint_3:
+  Type: Waypoint
+  Name: ground_route_3
+  Pos_x: 7.47903
+  Pos_y: -6.21939
+  Pos_z: 0.0
+  Ori_x: 0.0
+  Ori_y: 0.0
+  Ori_z: -0.999632
+  Ori_w: 0.0271134
+Waypoint_4:
+  Type: Waypoint
+  Name: opponent_outpost_firing_candidate
+  Pos_x: 11.3923
+  Pos_y: 2.99764
+  Pos_z: 0.0
+  Ori_x: 0.0
+  Ori_y: 0.0
+  Ori_z: 0.400807
+  Ori_w: 0.916163

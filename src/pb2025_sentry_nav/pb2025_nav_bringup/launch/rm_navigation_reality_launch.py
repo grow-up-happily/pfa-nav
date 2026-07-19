@@ -46,6 +46,7 @@ def generate_launch_description():
     # Create the launch configuration variables
     namespace = LaunchConfiguration("namespace")
     slam = LaunchConfiguration("slam")
+    mapless = LaunchConfiguration("mapless")
     world = LaunchConfiguration("world")
     map_yaml_file = LaunchConfiguration("map")
     prior_pcd_file = LaunchConfiguration("prior_pcd_file")
@@ -75,6 +76,12 @@ def generate_launch_description():
         "slam",
         default_value="False",
         description="Whether run a SLAM. If True, it will disable small_gicp and send static tf (map->odom)",
+    )
+
+    declare_mapless_cmd = DeclareLaunchArgument(
+        "mapless",
+        default_value="False",
+        description="Run odom-only navigation without a static map or prior PCD",
     )
 
     declare_world_cmd = DeclareLaunchArgument(
@@ -236,6 +243,7 @@ def generate_launch_description():
         launch_arguments={
             "namespace": namespace,
             "slam": slam,
+            "mapless": mapless,
             "map": map_yaml_file,
             "prior_pcd_file": prior_pcd_file,
             "use_sim_time": use_sim_time,
@@ -265,6 +273,7 @@ def generate_launch_description():
     # Declare the launch options
     ld.add_action(declare_namespace_cmd)
     ld.add_action(declare_slam_cmd)
+    ld.add_action(declare_mapless_cmd)
     ld.add_action(declare_world_cmd)
     ld.add_action(declare_map_yaml_cmd)
     ld.add_action(declare_prior_pcd_file_cmd)

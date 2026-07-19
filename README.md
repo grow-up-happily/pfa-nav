@@ -76,6 +76,30 @@ ros2 launch pb2025_nav_bringup rm_navigation_reality_launch.py slam:=True use_ro
 ros2 bag play <BAG_DIR> --clock
 ```
 
+## 实车无图导航（初版）
+
+该模式不加载栅格地图、地图服务器或先验 PCD，也不启动 small-GICP 重定位；它只使用 Point-LIO 的 `odom`、MID-360 实时点云和滚动代价地图。每次上场必须把机器人放在记录航点时使用的固定起点和朝向。
+
+启动无图导航：
+
+```bash
+ros2 launch pb2025_nav_bringup rm_navigation_mapless_launch.py
+```
+
+确认 Point-LIO、`terrain_map`、Nav2 action 均正常后，在另一个终端先运行只读预检。它会校验路线数值和四元数、等待 Nav2 action、检查 `odometry` 的 frame、起点偏移，并要求机器人连续静止 1 秒；该命令不会发运动目标：
+
+```bash
+ros2 run pb2025_nav_bringup mapless_nav_to_outpost.py
+```
+
+预检通过且 RViz 中实时点云、滚动代价地图、机器人朝向都正确后，才显式允许发车。路线按现有航点 1→2→3→4 行驶，点 4 是对方前哨站射击位候选：
+
+```bash
+ros2 run pb2025_nav_bringup mapless_nav_to_outpost.py --execute
+```
+
+脚本成功、失败或超时后都会退出，不会循环重发。若当前 `odom` XY 距记录原点超过 1 米，默认拒绝执行；`--allow-nonzero-start` 只用于已经重新核验过整条路线的情况，不能修正坐标漂移。预检只能确认启动后的相对 `odom` 朝向，无法识别机器人在赛场中的绝对朝向，所以必须先按记录航点时的物理朝向摆车，再启动定位。当前路线仍是待实车标定的初始候选；在确认 `odom` 原点重复性和“不上台阶”路线前，必须限制底盘速度、确认急停可用、先架空轮或小范围测试，并全程有人看护。
+
 ## 实车地图归位
 
 建图完成后，先不要关闭建图程序，新开终端保存栅格地图：

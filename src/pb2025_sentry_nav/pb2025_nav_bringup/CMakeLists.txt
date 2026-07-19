@@ -5,11 +5,14 @@ find_package(ament_cmake_auto REQUIRED)
 
 install(PROGRAMS
   scripts/prior_pcd_publisher.py
+  scripts/mapless_nav_to_outpost.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
 if(BUILD_TESTING)
-find_package(ament_lint_auto REQUIRED)
+  find_package(ament_cmake_pytest REQUIRED)
+  find_package(ament_lint_auto REQUIRED)
+  ament_add_pytest_test(test_mapless_assets test/test_mapless_assets.py)
   list(APPEND AMENT_LINT_AUTO_EXCLUDE
     ament_cmake_uncrustify
     ament_cmake_cpplint

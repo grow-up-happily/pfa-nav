@@ -42,6 +42,7 @@ def generate_launch_description():
     # Create the launch configuration variables
     namespace = LaunchConfiguration("namespace")
     slam = LaunchConfiguration("slam")
+    mapless = LaunchConfiguration("mapless")
     enable_nav = LaunchConfiguration("enable_nav")
     map_yaml_file = LaunchConfiguration("map")
     prior_pcd_file = LaunchConfiguration("prior_pcd_file")
@@ -98,6 +99,12 @@ def generate_launch_description():
 
     declare_slam_cmd = DeclareLaunchArgument(
         "slam", default_value="False", description="Whether run a SLAM"
+    )
+
+    declare_mapless_cmd = DeclareLaunchArgument(
+        "mapless",
+        default_value="False",
+        description="Run odom-only navigation without a static map or prior PCD",
     )
 
     declare_map_yaml_cmd = DeclareLaunchArgument(
@@ -225,6 +232,7 @@ def generate_launch_description():
                 condition=IfCondition(PythonExpression(["not ", slam])),
                 launch_arguments={
                     "namespace": namespace,
+                    "mapless": mapless,
                     "map": map_yaml_file,
                     "use_sim_time": use_sim_time,
                     "autostart": autostart,
@@ -265,6 +273,7 @@ def generate_launch_description():
     # Declare the launch options
     ld.add_action(declare_namespace_cmd)
     ld.add_action(declare_slam_cmd)
+    ld.add_action(declare_mapless_cmd)
     ld.add_action(declare_map_yaml_cmd)
     ld.add_action(declare_prior_pcd_file_cmd)
     ld.add_action(declare_use_sim_time_cmd)
