@@ -48,6 +48,7 @@ def generate_launch_description():
     prior_pcd_file = LaunchConfiguration("prior_pcd_file")
     use_sim_time = LaunchConfiguration("use_sim_time")
     params_file = LaunchConfiguration("params_file")
+    localization_params_file = LaunchConfiguration("localization_params_file")
     autostart = LaunchConfiguration("autostart")
     use_composition = LaunchConfiguration("use_composition")
     use_respawn = LaunchConfiguration("use_respawn")
@@ -73,6 +74,18 @@ def generate_launch_description():
 
     params_file = ReplaceString(
         source_file=params_file,
+        replacements={"<robot_namespace>": ("/", namespace)},
+        condition=LaunchConfigurationNotEquals("namespace", ""),
+    )
+
+    localization_params_file = ReplaceString(
+        source_file=localization_params_file,
+        replacements={"<robot_namespace>": ("")},
+        condition=LaunchConfigurationEquals("namespace", ""),
+    )
+
+    localization_params_file = ReplaceString(
+        source_file=localization_params_file,
         replacements={"<robot_namespace>": ("/", namespace)},
         condition=LaunchConfigurationNotEquals("namespace", ""),
     )
@@ -127,6 +140,12 @@ def generate_launch_description():
         description="Full path to the ROS2 parameters file to use for all launched nodes",
     )
 
+    declare_localization_params_file_cmd = DeclareLaunchArgument(
+        "localization_params_file",
+        default_value=LaunchConfiguration("params_file"),
+        description="Parameter file for Point-LIO and its scan/odometry adapters",
+    )
+
     declare_autostart_cmd = DeclareLaunchArgument(
         "autostart",
         default_value="true",
@@ -161,11 +180,14 @@ def generate_launch_description():
         description="Whether to periodically save the SLAM map.",
     )
 
-    workspace_root = os.path.normpath(
-        os.path.join(bringup_dir, "..", "..", "..", "..")
-    )
+    workspace_root = os.path.normpath(os.path.join(bringup_dir, "..", "..", "..", ".."))
     src_map_simulation_dir = os.path.join(
-        workspace_root, "src", "pb2025_sentry_nav", "pb2025_nav_bringup", "map", "simulation"
+        workspace_root,
+        "src",
+        "pb2025_sentry_nav",
+        "pb2025_nav_bringup",
+        "map",
+        "simulation",
     )
     declare_auto_save_map_dir_cmd = DeclareLaunchArgument(
         "auto_save_map_dir",
@@ -237,6 +259,7 @@ def generate_launch_description():
                     "use_sim_time": use_sim_time,
                     "autostart": autostart,
                     "params_file": params_file,
+                    "localization_params_file": localization_params_file,
                     "prior_pcd_file": prior_pcd_file,
                     "use_composition": use_composition,
                     "use_respawn": use_respawn,
@@ -278,6 +301,7 @@ def generate_launch_description():
     ld.add_action(declare_prior_pcd_file_cmd)
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_params_file_cmd)
+    ld.add_action(declare_localization_params_file_cmd)
     ld.add_action(declare_autostart_cmd)
     ld.add_action(declare_use_composition_cmd)
     ld.add_action(declare_use_respawn_cmd)

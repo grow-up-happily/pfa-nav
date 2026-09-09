@@ -3,7 +3,13 @@ import os
 import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction
+from launch.actions import (
+    DeclareLaunchArgument,
+    ExecuteProcess,
+    IncludeLaunchDescription,
+    OpaqueFunction,
+    TimerAction,
+)
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 
@@ -28,13 +34,18 @@ def launch_setup(context):
         }.items(),
     )
 
-    spawn_robots_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(pkg_simulator, "launch", "spawn_robots.launch.py")
-        ),
-        launch_arguments={
-            "world": selected_world,
-        }.items(),
+    spawn_robots_launch = TimerAction(
+        period=2.0,
+        actions=[
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    os.path.join(pkg_simulator, "launch", "spawn_robots.launch.py")
+                ),
+                launch_arguments={
+                    "world": selected_world,
+                }.items(),
+            )
+        ],
     )
 
     referee_system_launch = IncludeLaunchDescription(
@@ -43,7 +54,35 @@ def launch_setup(context):
         )
     )
 
-    return [gazebo_launch, spawn_robots_launch, referee_system_launch]
+    start_simulation = TimerAction(
+        period=3.0,
+        actions=[
+            ExecuteProcess(
+                cmd=[
+                    "ign",
+                    "service",
+                    "-s",
+                    "/world/default/control",
+                    "--reqtype",
+                    "ignition.msgs.WorldControl",
+                    "--reptype",
+                    "ignition.msgs.Boolean",
+                    "--timeout",
+                    "5000",
+                    "--req",
+                    "pause: false",
+                ],
+                output="screen",
+            )
+        ],
+    )
+
+    return [
+        gazebo_launch,
+        spawn_robots_launch,
+        referee_system_launch,
+        start_simulation,
+    ]
 
 
 def generate_launch_description():
@@ -54,11 +93,13 @@ def generate_launch_description():
         config = yaml.safe_load(file)
         default_world = config.get("world")
 
-    return LaunchDescription([
-        DeclareLaunchArgument(
-            "world",
-            default_value=default_world,
-            description="World name (e.g. rmul_2026, rmuc_2026)",
-        ),
-        OpaqueFunction(function=launch_setup),
-    ])
+    return LaunchDescription(
+        [
+            DeclareLaunchArgument(
+                "world",
+                default_value=default_world,
+                description="World name (e.g. rmul_2026, rmuc_2026)",
+            ),
+            OpaqueFunction(function=launch_setup),
+        ]
+    )

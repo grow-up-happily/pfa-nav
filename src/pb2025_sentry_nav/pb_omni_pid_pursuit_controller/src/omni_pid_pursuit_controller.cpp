@@ -245,7 +245,10 @@ geometry_msgs::msg::TwistStamped OmniPidPursuitController::computeVelocityComman
     }
   }
 
-  auto lin_vel = move_pid_->calculate(lin_dist, 0);
+  // Direction is already encoded by theta_dist. A negative distance-controller output
+  // reverses that direction and can drive away from the carrot after a replan-induced
+  // derivative spike.
+  auto lin_vel = std::max(0.0, move_pid_->calculate(lin_dist, 0));
   auto angular_vel = enable_rotation_ ? heading_pid_->calculate(angle_to_goal, 0) : 0.0;
 
   applyCurvatureLimitation(transformed_plan, carrot_pose, lin_vel);

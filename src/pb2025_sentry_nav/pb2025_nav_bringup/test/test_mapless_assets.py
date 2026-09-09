@@ -1,11 +1,28 @@
+# Copyright 2026 Lihan Chen
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import math
 from pathlib import Path
+from xml.etree import ElementTree
 
 import yaml
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 REALITY_CONFIG = PACKAGE_ROOT / "config" / "reality"
+SIMULATION_CONFIG = PACKAGE_ROOT / "config" / "simulation"
+MAPLESS_RVIZ = PACKAGE_ROOT / "rviz" / "nav2_mapless_view.rviz"
 
 
 def load_yaml(path):
@@ -35,6 +52,29 @@ def test_mapless_servers_use_odom_and_point_lio_has_no_prior_pcd():
     assert node_params(config, "bt_navigator")["global_frame"] == "odom"
     assert node_params(config, "behavior_server")["global_frame"] == "odom"
     assert node_params(config, "point_lio")["prior_pcd"]["enable"] is False
+    assert node_params(config, "fake_vel_transform")["init_spin_speed"] == 0.0
+
+
+def test_mapless_planner_matches_holonomic_base():
+    config = load_yaml(REALITY_CONFIG / "mapless_nav2_params.yaml")
+    planner = node_params(config, "planner_server")["GridBased"]
+
+    assert planner["plugin"] == "nav2_smac_planner/SmacPlanner2D"
+    assert "motion_model_for_search" not in planner
+
+
+def test_mapless_through_poses_tree_uses_odom_for_goal_pruning():
+    config = load_yaml(REALITY_CONFIG / "mapless_nav2_params.yaml")
+    bt_path = node_params(config, "bt_navigator")["default_nav_through_poses_bt_xml"]
+    assert bt_path.endswith("/behavior_trees/navigate_through_poses_mapless.xml")
+
+    tree = ElementTree.parse(
+        PACKAGE_ROOT / "behavior_trees" / "navigate_through_poses_mapless.xml"
+    )
+    remove_passed_goals = tree.find(".//RemovePassedGoals")
+    assert remove_passed_goals is not None
+    assert remove_passed_goals.attrib["global_frame"] == "odom"
+    assert remove_passed_goals.attrib["robot_base_frame"] == "gimbal_yaw_fake"
 
 
 def test_mapless_velocity_is_capped_for_initial_field_tests():
@@ -97,3 +137,39 @@ def test_mapless_wrapper_enables_mapless_mode_and_disables_slam():
 
     assert '"mapless": "True"' in launch_text
     assert '"slam": "False"' in launch_text
+
+
+def test_simulation_mapless_mode_selects_mapless_rviz_config():
+    launch_file = PACKAGE_ROOT / "launch" / "rm_navigation_simulation_launch.py"
+    launch_text = launch_file.read_text(encoding="utf-8")
+
+    assert '"rviz", "nav2_mapless_view.rviz"' in launch_text
+    assert '"rviz", "nav2_default_view.rviz"' in launch_text
+    assert "mapless," in launch_text
+
+
+def test_simulation_uses_ground_truth_only_for_scan_registration():
+    simulation = load_yaml(SIMULATION_CONFIG / "nav2_params.yaml")
+    mapless = load_yaml(REALITY_CONFIG / "mapless_nav2_params.yaml")
+
+    simulation_interface = node_params(simulation, "loam_interface")
+    assert simulation_interface["use_ground_truth"] is True
+    assert simulation_interface["ground_truth_odometry_topic"] == "chassis_odometry_gt"
+    assert simulation_interface["sensor_scan_topic"] == "velodyne_points"
+    assert node_params(mapless, "loam_interface")["use_ground_truth"] is False
+
+
+def test_mapless_rviz_uses_odom_and_displays_live_point_clouds():
+    rviz_config = load_yaml(MAPLESS_RVIZ)
+    manager = rviz_config["Visualization Manager"]
+    displays = {display["Name"]: display for display in manager["Displays"]}
+
+    assert manager["Global Options"]["Fixed Frame"] == "odom"
+    assert displays["TerrainMapExt"]["Topic"]["Value"] == "terrain_map_ext"
+    assert displays["RegisteredCloud"]["Topic"]["Value"] == "registered_scan"
+    assert displays["RegisteredCloud"]["Enabled"] is True
+    assert "PriorMap" not in displays
+    assert "Map" not in displays
+
+    rviz_text = MAPLESS_RVIZ.read_text(encoding="utf-8")
+    assert "Class: wp_map_tools/HeroBasePoseTool" not in rviz_text

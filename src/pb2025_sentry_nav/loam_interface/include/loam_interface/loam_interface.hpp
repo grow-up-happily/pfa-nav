@@ -16,13 +16,14 @@
 #define LOAM_INTERFACE__LOAM_INTERFACE_HPP_
 
 #include <memory>
+#include <mutex>
 #include <string>
 
 #include "nav_msgs/msg/odometry.hpp"
 #include "sensor_msgs/msg/point_cloud2.hpp"
 #include "tf2_ros/buffer.h"
-#include "tf2_ros/transform_listener.h"
 #include "tf2_ros/transform_broadcaster.h"
+#include "tf2_ros/transform_listener.h"
 
 namespace loam_interface
 {
@@ -37,8 +38,14 @@ private:
 
   void odometryCallback(const nav_msgs::msg::Odometry::ConstSharedPtr msg);
 
+  void groundTruthOdometryCallback(const nav_msgs::msg::Odometry::ConstSharedPtr msg);
+
+  void groundTruthPointCloudCallback(const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg);
+
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pcd_sub_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
+  rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr ground_truth_pcd_sub_;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr ground_truth_odom_sub_;
 
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pcd_pub_;
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
@@ -49,12 +56,20 @@ private:
 
   std::string state_estimation_topic_;
   std::string registered_scan_topic_;
+  std::string ground_truth_odometry_topic_;
+  std::string sensor_scan_topic_;
   std::string odom_frame_;
   std::string lidar_frame_;
   std::string base_frame_;
 
   bool base_frame_to_lidar_initialized_;
+  bool use_ground_truth_;
+  bool ground_truth_initialized_;
   tf2::Transform tf_odom_to_lidar_odom_;
+  tf2::Transform tf_world_to_initial_base_;
+  tf2::Transform tf_odom_to_base_;
+  tf2::Transform tf_base_to_lidar_;
+  std::mutex ground_truth_mutex_;
 };
 
 }  // namespace loam_interface

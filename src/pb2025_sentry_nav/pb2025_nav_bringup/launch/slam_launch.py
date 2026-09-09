@@ -99,11 +99,14 @@ def generate_launch_description():
         description="Whether to periodically save the SLAM map.",
     )
 
-    workspace_root = os.path.normpath(
-        os.path.join(bringup_dir, "..", "..", "..", "..")
-    )
+    workspace_root = os.path.normpath(os.path.join(bringup_dir, "..", "..", "..", ".."))
     src_map_simulation_dir = os.path.join(
-        workspace_root, "src", "pb2025_sentry_nav", "pb2025_nav_bringup", "map", "simulation"
+        workspace_root,
+        "src",
+        "pb2025_sentry_nav",
+        "pb2025_nav_bringup",
+        "map",
+        "simulation",
     )
     declare_auto_save_map_dir_cmd = DeclareLaunchArgument(
         "auto_save_map_dir",
@@ -205,11 +208,7 @@ def generate_launch_description():
         parameters=[
             configured_params,
             {"prior_pcd.enable": False},
-            {
-                "pcd_save.pcd_save_en": ParameterValue(
-                    auto_save_pcd, value_type=bool
-                )
-            },
+            {"pcd_save.pcd_save_en": ParameterValue(auto_save_pcd, value_type=bool)},
             {
                 "pcd_save.interval": ParameterValue(
                     auto_save_pcd_interval, value_type=int

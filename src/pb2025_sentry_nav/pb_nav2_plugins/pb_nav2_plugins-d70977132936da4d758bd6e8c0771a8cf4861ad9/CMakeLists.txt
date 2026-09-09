@@ -18,7 +18,7 @@ ament_auto_add_library(pb_back_up_frees_space_behavior SHARED
   src/behaviors/back_up_free_space.cpp
 )
 
-ament_auto_add_library(layers SHARED
+ament_auto_add_library(pb_nav2_costmap_layers SHARED
   src/layers/intensity_voxel_layer.cpp
 )
 

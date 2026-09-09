@@ -20,16 +20,14 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, TextSubstitution
+from launch.substitutions import LaunchConfiguration, PythonExpression, TextSubstitution
 from launch_ros.actions import Node
 from launch_ros.descriptions import ParameterFile
 from nav2_common.launch import RewrittenYaml
 
 
 def _src_bringup_dir(bringup_dir):
-    workspace_root = os.path.normpath(
-        os.path.join(bringup_dir, "..", "..", "..", "..")
-    )
+    workspace_root = os.path.normpath(os.path.join(bringup_dir, "..", "..", "..", ".."))
     return os.path.join(
         workspace_root, "src", "pb2025_sentry_nav", "pb2025_nav_bringup"
     )
@@ -46,12 +44,14 @@ def generate_launch_description():
     # Create the launch configuration variables
     namespace = LaunchConfiguration("namespace")
     slam = LaunchConfiguration("slam")
+    mapless = LaunchConfiguration("mapless")
     enable_nav = LaunchConfiguration("enable_nav")
     world = LaunchConfiguration("world")
     map_yaml_file = LaunchConfiguration("map")
     prior_pcd_file = LaunchConfiguration("prior_pcd_file")
     use_sim_time = LaunchConfiguration("use_sim_time")
     params_file = LaunchConfiguration("params_file")
+    localization_params_file = LaunchConfiguration("localization_params_file")
     autostart = LaunchConfiguration("autostart")
     use_composition = LaunchConfiguration("use_composition")
     use_respawn = LaunchConfiguration("use_respawn")
@@ -64,11 +64,11 @@ def generate_launch_description():
     auto_save_pcd = LaunchConfiguration("auto_save_pcd")
     auto_save_pcd_interval = LaunchConfiguration("auto_save_pcd_interval")
 
-    configured_params = ParameterFile(
+    configured_localization_params = ParameterFile(
         RewrittenYaml(
-            source_file=params_file,
+            source_file=localization_params_file,
             root_key=namespace,
-            param_rewrites={},
+            param_rewrites={"use_sim_time": use_sim_time},
             convert_types=True,
         ),
         allow_substs=True,
@@ -85,6 +85,12 @@ def generate_launch_description():
         "slam",
         default_value="False",
         description="Whether run a SLAM. If True, it will disable small_gicp and send static tf (map->odom)",
+    )
+
+    declare_mapless_cmd = DeclareLaunchArgument(
+        "mapless",
+        default_value="False",
+        description="Run odom-frame navigation without map_server, prior PCD, or relocalization",
     )
 
     declare_enable_nav_cmd = DeclareLaunchArgument(
@@ -123,10 +129,28 @@ def generate_launch_description():
 
     declare_params_file_cmd = DeclareLaunchArgument(
         "params_file",
+        default_value=PythonExpression(
+            [
+                "'",
+                os.path.join(
+                    bringup_dir, "config", "reality", "mapless_nav2_params.yaml"
+                ),
+                "' if '",
+                mapless,
+                "'.lower() == 'true' else '",
+                os.path.join(bringup_dir, "config", "simulation", "nav2_params.yaml"),
+                "'",
+            ]
+        ),
+        description="Full path to the ROS2 parameters file to use for all launched nodes",
+    )
+
+    declare_localization_params_file_cmd = DeclareLaunchArgument(
+        "localization_params_file",
         default_value=os.path.join(
             bringup_dir, "config", "simulation", "nav2_params.yaml"
         ),
-        description="Full path to the ROS2 parameters file to use for all launched nodes",
+        description="Simulation-specific parameters for Point-LIO and its adapters",
     )
 
     declare_autostart_cmd = DeclareLaunchArgument(
@@ -149,7 +173,17 @@ def generate_launch_description():
 
     declare_rviz_config_file_cmd = DeclareLaunchArgument(
         "rviz_config_file",
-        default_value=os.path.join(bringup_dir, "rviz", "nav2_default_view.rviz"),
+        default_value=PythonExpression(
+            [
+                "'",
+                os.path.join(bringup_dir, "rviz", "nav2_mapless_view.rviz"),
+                "' if '",
+                mapless,
+                "'.lower() == 'true' else '",
+                os.path.join(bringup_dir, "rviz", "nav2_default_view.rviz"),
+                "'",
+            ]
+        ),
         description="Full path to the RVIZ config file to use",
     )
 
@@ -197,7 +231,7 @@ def generate_launch_description():
         name="ign_sim_pointcloud_tool",
         output="screen",
         namespace=namespace,
-        parameters=[configured_params],
+        parameters=[configured_localization_params],
     )
 
     # start_hero_lidar = Node(
@@ -228,11 +262,13 @@ def generate_launch_description():
         launch_arguments={
             "namespace": namespace,
             "slam": slam,
+            "mapless": mapless,
             "enable_nav": enable_nav,
             "map": map_yaml_file,
             "prior_pcd_file": prior_pcd_file,
             "use_sim_time": use_sim_time,
             "params_file": params_file,
+            "localization_params_file": localization_params_file,
             "autostart": autostart,
             "use_composition": use_composition,
             "use_respawn": use_respawn,
@@ -259,12 +295,14 @@ def generate_launch_description():
     # Declare the launch options
     ld.add_action(declare_namespace_cmd)
     ld.add_action(declare_slam_cmd)
+    ld.add_action(declare_mapless_cmd)
     ld.add_action(declare_enable_nav_cmd)
     ld.add_action(declare_world_cmd)
     ld.add_action(declare_map_yaml_cmd)
     ld.add_action(declare_prior_pcd_file_cmd)
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_params_file_cmd)
+    ld.add_action(declare_localization_params_file_cmd)
     ld.add_action(declare_autostart_cmd)
     ld.add_action(declare_use_composition_cmd)
     ld.add_action(declare_rviz_config_file_cmd)

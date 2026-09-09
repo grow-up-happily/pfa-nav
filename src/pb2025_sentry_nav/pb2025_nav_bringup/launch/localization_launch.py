@@ -35,6 +35,7 @@ def generate_launch_description():
     autostart = LaunchConfiguration("autostart")
     prior_pcd_file = LaunchConfiguration("prior_pcd_file")
     params_file = LaunchConfiguration("params_file")
+    localization_params_file = LaunchConfiguration("localization_params_file")
     use_composition = LaunchConfiguration("use_composition")
     container_name = LaunchConfiguration("container_name")
     container_name_full = (namespace, "/", container_name)
@@ -50,6 +51,16 @@ def generate_launch_description():
     configured_params = ParameterFile(
         RewrittenYaml(
             source_file=params_file,
+            root_key=namespace,
+            param_rewrites=param_substitutions,
+            convert_types=True,
+        ),
+        allow_substs=True,
+    )
+
+    configured_localization_params = ParameterFile(
+        RewrittenYaml(
+            source_file=localization_params_file,
             root_key=namespace,
             param_rewrites=param_substitutions,
             convert_types=True,
@@ -95,6 +106,12 @@ def generate_launch_description():
         description="Full path to the ROS2 parameters file to use for all launched nodes",
     )
 
+    declare_localization_params_file_cmd = DeclareLaunchArgument(
+        "localization_params_file",
+        default_value=LaunchConfiguration("params_file"),
+        description="Parameter file for Point-LIO and its scan/odometry adapters",
+    )
+
     declare_autostart_cmd = DeclareLaunchArgument(
         "autostart",
         default_value="true",
@@ -131,7 +148,7 @@ def generate_launch_description():
         respawn=use_respawn,
         respawn_delay=2.0,
         parameters=[
-            configured_params,
+            configured_localization_params,
             {"prior_pcd.prior_pcd_map_path": prior_pcd_file},
         ],
         arguments=["--ros-args", "--log-level", log_level],
@@ -166,7 +183,7 @@ def generate_launch_description():
                 output="screen",
                 respawn=use_respawn,
                 respawn_delay=2.0,
-                parameters=[configured_params],
+                parameters=[configured_localization_params],
                 arguments=["--ros-args", "--log-level", log_level],
             ),
             Node(
@@ -176,7 +193,7 @@ def generate_launch_description():
                 output="screen",
                 respawn=use_respawn,
                 respawn_delay=2.0,
-                parameters=[configured_params],
+                parameters=[configured_localization_params],
                 arguments=["--ros-args", "--log-level", log_level],
             ),
             Node(
@@ -225,13 +242,13 @@ def generate_launch_description():
                 package="sensor_scan_generation",
                 plugin="sensor_scan_generation::SensorScanGenerationNode",
                 name="sensor_scan_generation",
-                parameters=[configured_params],
+                parameters=[configured_localization_params],
             ),
             ComposableNode(
                 package="loam_interface",
                 plugin="loam_interface::LoamInterfaceNode",
                 name="loam_interface",
-                parameters=[configured_params],
+                parameters=[configured_localization_params],
             ),
         ],
     )
@@ -283,6 +300,7 @@ def generate_launch_description():
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_prior_pcd_file_cmd)
     ld.add_action(declare_params_file_cmd)
+    ld.add_action(declare_localization_params_file_cmd)
     ld.add_action(declare_autostart_cmd)
     ld.add_action(declare_use_composition_cmd)
     ld.add_action(declare_container_name_cmd)

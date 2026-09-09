@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
-# Copyright 2025
+# Copyright 2025 Lihan Chen
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 """Publish a prior PCD map as sensor_msgs/PointCloud2 on `prior_map`."""
 
@@ -85,7 +91,9 @@ def load_binary_pcd(path):
         for i, name in enumerate(fields):
             key = (types[i], sizes[i])
             if key not in _NP_DTYPE:
-                raise ValueError(f"Unsupported field type {types[i]}{sizes[i]} for '{name}'")
+                raise ValueError(
+                    f"Unsupported field type {types[i]}{sizes[i]} for '{name}'"
+                )
             if counts[i] == 1:
                 dtype_specs.append((name, _NP_DTYPE[key]))
             else:
@@ -95,7 +103,9 @@ def load_binary_pcd(path):
         raw = f.read()
         expected = dtype.itemsize * n_points
         if len(raw) < expected:
-            raise OSError(f"PCD body truncated: expected {expected} bytes, got {len(raw)}")
+            raise OSError(
+                f"PCD body truncated: expected {expected} bytes, got {len(raw)}"
+            )
         arr = np.frombuffer(raw[:expected], dtype=dtype)
 
     return arr, fields, sizes, types, counts
@@ -237,11 +247,17 @@ class PriorPCDPublisher(Node):
         file_name = self.get_parameter("file_name").get_parameter_value().string_value
         frame_id = self.get_parameter("frame_id").get_parameter_value().string_value
         base_frame = self.get_parameter("base_frame").get_parameter_value().string_value
-        lidar_frame = self.get_parameter("lidar_frame").get_parameter_value().string_value
+        lidar_frame = (
+            self.get_parameter("lidar_frame").get_parameter_value().string_value
+        )
         old_lidar_pose = list(self.get_parameter("old_lidar_pose").value)
-        period = self.get_parameter("publish_period_sec").get_parameter_value().double_value
+        period = (
+            self.get_parameter("publish_period_sec").get_parameter_value().double_value
+        )
         timeout_sec = (
-            self.get_parameter("transform_timeout_sec").get_parameter_value().double_value
+            self.get_parameter("transform_timeout_sec")
+            .get_parameter_value()
+            .double_value
         )
 
         if not file_name:
@@ -290,7 +306,10 @@ class PriorPCDPublisher(Node):
                 while rclpy.ok():
                     try:
                         tf_stamped = tf_buffer.lookup_transform(
-                            base_frame, lidar_frame, Time(), timeout=Duration(seconds=timeout_sec)
+                            base_frame,
+                            lidar_frame,
+                            Time(),
+                            timeout=Duration(seconds=timeout_sec),
                         )
                         arr = transform_xyz(arr, tf_stamped.transform)
                         t = tf_stamped.transform.translation
@@ -311,7 +330,9 @@ class PriorPCDPublisher(Node):
                 tf_executor.remove_node(self)
                 tf_thread.join(timeout=1.0)
 
-        self.cloud_msg = build_pointcloud2_msg(arr, fields, sizes, types, counts, frame_id)
+        self.cloud_msg = build_pointcloud2_msg(
+            arr, fields, sizes, types, counts, frame_id
+        )
         self.get_logger().info(
             f"Loaded {self.cloud_msg.width} points, fields={fields}, "
             f"point_step={self.cloud_msg.point_step}, frame_id='{frame_id}'"

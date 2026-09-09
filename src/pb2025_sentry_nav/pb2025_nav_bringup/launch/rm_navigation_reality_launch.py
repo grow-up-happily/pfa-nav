@@ -27,9 +27,7 @@ from nav2_common.launch import RewrittenYaml
 
 
 def _src_bringup_dir(bringup_dir):
-    workspace_root = os.path.normpath(
-        os.path.join(bringup_dir, "..", "..", "..", "..")
-    )
+    workspace_root = os.path.normpath(os.path.join(bringup_dir, "..", "..", "..", ".."))
     return os.path.join(
         workspace_root, "src", "pb2025_sentry_nav", "pb2025_nav_bringup"
     )

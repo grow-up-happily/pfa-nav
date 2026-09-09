@@ -239,9 +239,15 @@ int main(int argc, char **argv) {
   std::vector<float> pointNKNSquaredDistance;
 
   rclcpp::Rate rate(100);
-  bool status = rclcpp::ok();
-  while (status) {
-    rclcpp::spin_some(nh);
+  while (rclcpp::ok()) {
+    try {
+      rclcpp::spin_some(nh);
+    } catch (const rclcpp::exceptions::RCLError &) {
+      if (!rclcpp::ok()) {
+        break;
+      }
+      throw;
+    }
 
     if (newlaserCloud) {
       newlaserCloud = false;
@@ -563,7 +569,6 @@ int main(int argc, char **argv) {
       pubTerrainCloud->publish(terrainCloud2);
     }
 
-    status = rclcpp::ok();
     rate.sleep();
   }
 

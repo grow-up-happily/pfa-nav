@@ -87,6 +87,9 @@ point_lio:
 loam_interface:
   ros__parameters:
     use_sim_time: True
+    use_ground_truth: True
+    ground_truth_odometry_topic: "chassis_odometry_gt"
+    sensor_scan_topic: "velodyne_points"
     state_estimation_topic: "aft_mapped_to_init"
     registered_scan_topic: "cloud_registered"
     odom_frame: "odom"
