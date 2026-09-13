@@ -8,7 +8,8 @@ from collections import deque
 from geometry_msgs.msg import PoseStamped, Twist
 from nav_msgs.msg import Path
 from visualization_msgs.msg import Marker, MarkerArray
-from nav2_msgs.action import NavigateToPose, NavigateThroughPoses
+from nav2_msgs.action import NavigateToPose, NavigateThroughPoses, FollowPath
+from nav2_msgs.srv import GetCostmap
 from rcl_interfaces.msg import Log
 from rclpy.action import ActionClient
 from rclpy.duration import Duration
@@ -21,6 +22,7 @@ import yaml
 import argparse
 import time
 import math
+import heapq
 
 ROS_LOG_DEBUG = Log.DEBUG[0]
 ROS_LOG_INFO = Log.INFO[0]
@@ -41,6 +43,64 @@ CALIBRATION_MODE_BASE_CORRECTION = 'base_correction'
 CALIBRATION_MODE_EXTRA_STRAIGHT = 'extra_straight'
 EXTRA_STRAIGHT_WAYPOINT_IDS = (4, 5)
 EXTRA_STRAIGHT_TRANSITIONS = {EXTRA_STRAIGHT_WAYPOINT_IDS}
+
+
+def tdt_simplify_path(path, threshold=0.1):
+    """TDT-style Douglas-Peucker simplification with no map dependency."""
+    if len(path) <= 2:
+        return list(path)
+    ax, ay = path[0]
+    bx, by = path[-1]
+    dx, dy = bx - ax, by - ay
+    denom = math.hypot(dx, dy) or 1.0
+    distances = [abs(dy * (x - ax) - dx * (y - ay)) / denom for x, y in path[1:-1]]
+    index, distance = max(enumerate(distances, 1), key=lambda item: item[1])
+    if distance <= threshold:
+        return [path[0], path[-1]]
+    return tdt_simplify_path(path[:index + 1], threshold)[:-1] + tdt_simplify_path(path[index:], threshold)
+
+
+def tdt_astar(grid, start, goal, allow_unknown=True):
+    """Small, deterministic 8-neighbour TDT-compatible grid search.
+
+    `grid` is row-major with 0..252 free/cost, 253+ occupied and -1 unknown.
+    """
+    height = len(grid)
+    width = len(grid[0]) if height else 0
+    sx, sy = start
+    gx, gy = goal
+    def free(x, y):
+        value = grid[y][x]
+        return value < 253 and (allow_unknown or value != -1)
+    if not (0 <= sx < width and 0 <= gx < width and 0 <= sy < height and 0 <= gy < height):
+        return []
+    if not free(sx, sy) or not free(gx, gy):
+        return []
+    queue = [(0.0, (sx, sy))]
+    costs = {(sx, sy): 0.0}
+    parents = {}
+    neighbours = ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1))
+    while queue:
+        _, current = heapq.heappop(queue)
+        if current == (gx, gy):
+            path = [current]
+            while current in parents:
+                current = parents[current]
+                path.append(current)
+            return list(reversed(path))
+        for dx, dy in neighbours:
+            nx, ny = current[0] + dx, current[1] + dy
+            if not (0 <= nx < width and 0 <= ny < height) or not free(nx, ny):
+                continue
+            step = math.sqrt(2.0) if dx and dy else 1.0
+            penalty = 1.0 + (grid[ny][nx] / 253.0 if grid[ny][nx] >= 0 else 0.0)
+            new_cost = costs[current] + step * penalty
+            if new_cost < costs.get((nx, ny), float('inf')):
+                costs[(nx, ny)] = new_cost
+                parents[(nx, ny)] = current
+                heuristic = math.hypot(gx - nx, gy - ny)
+                heapq.heappush(queue, (new_cost + heuristic, (nx, ny)))
+    return []
 
 
 def clamp(value, min_value, max_value):
@@ -180,8 +240,12 @@ class AutoNavNode(Node):
         judge_topic='/judge',
         judge_home_id=1,
         judge_remote_id=4,
+        enable_tdt=False,
     ):
         super().__init__('auto_nav_node')
+        self.enable_tdt = bool(enable_tdt)
+        if self.enable_tdt:
+            self.get_logger().warn('TDT 路径逻辑已启用：使用 TDT 风格栅格代价和路径化简预检，Nav2 仍负责最终执行')
         
         # 加载航点
         self.waypoints = self.load_waypoints(yaml_path)
@@ -253,10 +317,13 @@ class AutoNavNode(Node):
                 self.get_logger().info("未指定 --order，等待 /judge 指令后开始导航")
         
         # 导航客户端
-        self.nav_ac = ActionClient(self, NavigateToPose, '/navigate_to_pose')
+        # Keep interfaces relative so the node namespace selects the robot instance.
+        self.nav_ac = ActionClient(self, NavigateToPose, 'navigate_to_pose')
         self.nav_through_poses_ac = ActionClient(
-            self, NavigateThroughPoses, '/navigate_through_poses'
+            self, NavigateThroughPoses, 'navigate_through_poses'
         )
+        self.follow_path_ac = ActionClient(self, FollowPath, 'follow_path')
+        self.costmap_client = self.create_client(GetCostmap, 'global_costmap/get_costmap')
 
         self.map_frame = map_frame
         self.chassis_frame = chassis_frame
@@ -792,6 +859,9 @@ class AutoNavNode(Node):
         """发送导航目标点"""
         if self.sending:
             return
+        if self.enable_tdt:
+            self.send_tdt_goal(waypoint_idx)
+            return
         self.current_goal_handle = None
         self.pending_straight_handoff_next_idx = None
         self.straight_handoff_cancel_requested = False
@@ -815,6 +885,156 @@ class AutoNavNode(Node):
         )
         self.sending = True
         self.retry_count = 0
+
+    def send_tdt_goal(self, waypoint_idx):
+        """Build a TDT grid path from the live global costmap and follow it."""
+        if self.sending:
+            return
+        if not self.costmap_client.service_is_ready():
+            self.get_logger().warn('TDT 需要 global_costmap/get_costmap，服务尚未就绪')
+            self.sending = True
+            self.tdt_plan_failed('costmap service unavailable')
+            return
+        try:
+            sx, sy, _ = self.lookup_frame_pose(self.position_frame)
+        except TransformException as ex:
+            self.tdt_plan_failed(f'TF unavailable: {ex}')
+            return
+        wp = self.waypoints[waypoint_idx]
+        request = GetCostmap.Request()
+        self.sending = True
+        self._tdt_waypoint_idx = waypoint_idx
+        self._tdt_start = (sx, sy)
+        self._tdt_goal = (float(wp['Pos_x']), float(wp['Pos_y']))
+        future = self.costmap_client.call_async(request)
+        future.add_done_callback(self.tdt_costmap_callback)
+
+    def tdt_costmap_callback(self, future):
+        try:
+            costmap = future.result().map
+            metadata = costmap.metadata
+            width, height = int(metadata.size_x), int(metadata.size_y)
+            grid = [list(costmap.data[y * width:(y + 1) * width]) for y in range(height)]
+            origin_x, origin_y = metadata.origin.position.x, metadata.origin.position.y
+            resolution = metadata.resolution
+            start = (int(math.floor((self._tdt_start[0] - origin_x) / resolution)),
+                     int(math.floor((self._tdt_start[1] - origin_y) / resolution)))
+            goal = (int(math.floor((self._tdt_goal[0] - origin_x) / resolution)),
+                    int(math.floor((self._tdt_goal[1] - origin_y) / resolution)))
+            cells = tdt_astar(grid, start, goal, allow_unknown=True)
+            if not cells:
+                self.tdt_plan_failed('no collision-free path')
+                return
+            points = [(origin_x + (x + 0.5) * resolution, origin_y + (y + 0.5) * resolution) for x, y in cells]
+            points[0] = self._tdt_start
+            points[-1] = self._tdt_goal
+            points = tdt_simplify_path(points, 0.1)
+            path = Path()
+            path.header.frame_id = self.map_frame
+            path.header.stamp = self.get_clock().now().to_msg()
+            for index, (x, y) in enumerate(points):
+                pose = PoseStamped()
+                pose.header = path.header
+                pose.pose.position.x, pose.pose.position.y = float(x), float(y)
+                if index + 1 < len(points):
+                    nx, ny = points[index + 1]
+                else:
+                    nx, ny = points[index - 1] if index else points[index]
+                yaw = math.atan2(ny - y, nx - x)
+                pose.pose.orientation.z = math.sin(yaw / 2.0)
+                pose.pose.orientation.w = math.cos(yaw / 2.0)
+                path.poses.append(pose)
+            self._send_tdt_follow_path(path)
+        except Exception as ex:
+            self.tdt_plan_failed(f'costmap conversion failed: {ex}')
+
+    def _send_tdt_follow_path(self, path):
+        if not self.follow_path_ac.wait_for_server(timeout_sec=2.0):
+            self.tdt_plan_failed('follow_path action unavailable')
+            return
+        goal = FollowPath.Goal()
+        goal.path = path
+        goal.controller_id = 'FollowPath'
+        goal.goal_checker_id = 'general_goal_checker'
+        self.get_logger().info(f'TDT 路径已生成: {len(path.poses)} 点')
+        future = self.follow_path_ac.send_goal_async(goal)
+        future.add_done_callback(self.tdt_goal_response_callback)
+
+    def tdt_goal_response_callback(self, future):
+        try:
+            handle = future.result()
+            if not handle.accepted:
+                self.tdt_plan_failed('follow_path goal rejected')
+                return
+            self.current_goal_handle = handle
+            result_future = handle.get_result_async()
+            result_future.add_done_callback(self.tdt_result_callback)
+        except Exception as ex:
+            self.tdt_plan_failed(f'follow_path response failed: {ex}')
+
+    def tdt_result_callback(self, future):
+        status = future.result().status
+        self.current_goal_handle = None
+        self.sending = False
+        if status == GoalStatus.STATUS_SUCCEEDED:
+            self.get_logger().info('TDT 路径跟踪完成')
+            self.handle_tdt_success()
+        else:
+            self.get_logger().warn(f'TDT 路径跟踪失败，状态码: {status}')
+            self.retry_count += 1
+            if self.retry_count >= self.max_retry:
+                self.get_logger().error('TDT 连续失败达到重试上限，切换下一个航点')
+                self.current_idx = (self.current_idx + 1) % len(self.targets)
+                self.retry_count = 0
+
+    def tdt_plan_failed(self, reason):
+        self.sending = False
+        self.get_logger().warn(f'TDT 规划失败: {reason}')
+        self.retry_count += 1
+        if self.retry_count >= self.max_retry:
+            self.get_logger().error('TDT 规划连续失败达到重试上限，切换下一个航点')
+            self.current_idx = (self.current_idx + 1) % len(self.targets)
+            self.retry_count = 0
+
+    def handle_tdt_success(self):
+        """Advance the same route/calibration state machine as Nav2 goals."""
+        reached_id = self.targets[self.current_idx] + 1
+        self.last_passed_waypoint_id = reached_id
+        if self.judge_control_active and self.current_idx >= len(self.targets) - 1:
+            self.judge_idle = False
+            self.retry_count = 0
+            return
+        if not self.judge_control_active and len(self.targets) == 1:
+            self.get_logger().info('单目标点模式，TDT 导航完成，退出')
+            self.timer.cancel()
+            rclpy.shutdown()
+            return
+
+        self.retry_count = 0
+        finished_idx = self.current_idx
+        next_idx = (
+            self.current_idx + 1 if self.judge_control_active
+            else (self.current_idx + 1) % len(self.targets)
+        )
+        if self.should_run_base_calibration(finished_idx, next_idx):
+            self.previous_idx_for_navigation = None
+            self.start_base_forward(next_idx)
+            return
+        if self.should_run_straight_calibration(finished_idx, next_idx):
+            self.previous_idx_for_navigation = None
+            self.start_straight_calibration(next_idx)
+            return
+        if self.should_run_extra_straight_calibration(finished_idx, next_idx):
+            self.previous_idx_for_navigation = None
+            self.start_extra_straight_calibration(next_idx)
+            return
+
+        self.previous_idx_for_navigation = finished_idx
+        self.current_idx = next_idx
+        next_wp_name = self.waypoints[self.targets[self.current_idx]].get(
+            'Name', f'Waypoint_{self.targets[self.current_idx] + 1}'
+        )
+        self.get_logger().info(f'准备导航到下一个点: {next_wp_name}')
 
     def send_route_goal(self):
         """一次性发送整条经过所有点的导航路线"""
@@ -1788,7 +2008,7 @@ class AutoNavNode(Node):
                     self.get_logger().warn("/judge 路线索引越界，停止并等待下一条指令")
                     self.judge_idle = True
                     return
-            if self.through_all_waypoints:
+            if self.through_all_waypoints and not self.enable_tdt:
                 self.send_route_goal()
             else:
                 if self.maybe_start_straight_before_nav():
@@ -1985,6 +2205,10 @@ def main():
         help='直线校准时发布 yaw 偏差(rad)的 std_msgs/Float32 话题；未校准时发布 0.0'
     )
     parser.add_argument(
+        '--enable-tdt', action='store_true',
+        help='启用 TDT 风格栅格代价/路径化简逻辑；默认关闭'
+    )
+    parser.add_argument(
         '--judge-topic',
         type=str,
         default='/judge',
@@ -2002,9 +2226,10 @@ def main():
         default=4,
         help='/judge=1 时前往的航点编号'
     )
-    args = parser.parse_args()
+    # Keep ROS 2 arguments (for example --ros-args/-r remappings) for rclpy.
+    args, ros_args = parser.parse_known_args()
     
-    rclpy.init()
+    rclpy.init(args=ros_args)
     node = None
     
     try:
@@ -2040,7 +2265,8 @@ def main():
             angle_diff_topic=args.angle_diff_topic,
             judge_topic=args.judge_topic,
             judge_home_id=args.judge_home_id,
-            judge_remote_id=args.judge_remote_id
+            judge_remote_id=args.judge_remote_id,
+            enable_tdt=args.enable_tdt,
         )
         rclpy.spin(node)
     except KeyboardInterrupt:

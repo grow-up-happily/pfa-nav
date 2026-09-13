@@ -173,7 +173,8 @@ small_gicp_relocalization:
     robot_base_frame: "gimbal_yaw"
     lidar_frame: "front_mid360"           # pi/6 0.523599 ，pi/3 1.047198
     old_lidar_pose: [0.16, 0.0, 0.18, 0.0 , 0.0, 0.0]  # [x, y, z, roll, pitch, yaw], mapping-time base->lidar pose used by saved PCD
-    init_pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]   # [x, y, z, roll, pitch, yaw]
+    # Current map->odom seed captured from the correctly positioned robot.
+    init_pose: [0.975, -1.624, -0.214, 0.0, 0.0, 0.005]   # [x, y, z, roll, pitch, yaw]
     # The prior_pcd_file does not need to be specified since it going to be set by defaults in launch.
     # prior_pcd_file: ""
 
@@ -435,7 +436,7 @@ local_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 4.0
-        inflation_radius: 0.7
+        inflation_radius: 0.45
       always_send_full_costmap: False
 
 global_costmap:
@@ -482,7 +483,7 @@ global_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 4.0
-        inflation_radius: 0.7
+        inflation_radius: 0.45
       always_send_full_costmap: False
 
 # The yaml_filename does not need to be specified since it going to be set by defaults in launch.

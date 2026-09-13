@@ -18,6 +18,46 @@ import yaml
 import argparse
 import time
 import math
+import heapq
+
+
+def tdt_simplify_path(path, threshold=0.1):
+    if len(path) <= 2:
+        return list(path)
+    ax, ay = path[0]; bx, by = path[-1]
+    dx, dy = bx - ax, by - ay
+    denom = math.hypot(dx, dy) or 1.0
+    distances = [abs(dy * (x - ax) - dx * (y - ay)) / denom for x, y in path[1:-1]]
+    index, distance = max(enumerate(distances, 1), key=lambda item: item[1])
+    if distance <= threshold:
+        return [path[0], path[-1]]
+    return tdt_simplify_path(path[:index + 1], threshold)[:-1] + tdt_simplify_path(path[index:], threshold)
+
+
+def tdt_astar(grid, start, goal, allow_unknown=True):
+    height = len(grid); width = len(grid[0]) if height else 0
+    sx, sy = start; gx, gy = goal
+    def free(x, y):
+        value = grid[y][x]
+        return value < 253 and (allow_unknown or value != -1)
+    if not (0 <= sx < width and 0 <= gx < width and 0 <= sy < height and 0 <= gy < height) or not free(sx, sy) or not free(gx, gy):
+        return []
+    queue = [(0.0, (sx, sy))]; costs = {(sx, sy): 0.0}; parents = {}
+    for_current = ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1))
+    while queue:
+        _, current = heapq.heappop(queue)
+        if current == (gx, gy):
+            path = [current]
+            while current in parents: current = parents[current]; path.append(current)
+            return list(reversed(path))
+        for dx, dy in for_current:
+            nx, ny = current[0] + dx, current[1] + dy
+            if not (0 <= nx < width and 0 <= ny < height) or not free(nx, ny): continue
+            new_cost = costs[current] + (math.sqrt(2.0) if dx and dy else 1.0)
+            if new_cost < costs.get((nx, ny), float('inf')):
+                costs[(nx, ny)] = new_cost; parents[(nx, ny)] = current
+                heapq.heappush(queue, (new_cost + math.hypot(gx - nx, gy - ny), (nx, ny)))
+    return []
 
 ROS_LOG_DEBUG = Log.DEBUG[0]
 ROS_LOG_INFO = Log.INFO[0]

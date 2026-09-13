@@ -193,6 +193,14 @@ ros2 run rqt_tf_tree rqt_tf_tree --ros-args -r /tf:=tf -r /tf_static:=tf_static 
 
 ## 代码改动记录
 
+### TDT 路径逻辑开关
+
+`auto_nav/auto_nav_su.py` 支持单一命令行开关 `--enable-tdt`。默认关闭时保持原有 Nav2 `NavigateToPose`/`NavigateThroughPoses` 流程；启用后从 global costmap 生成 TDT 风格栅格路径，并通过 `FollowPath` 交给现有控制器执行。
+
+```bash
+python3 auto_nav_su.py --red --enable-tdt
+```
+
 ### 2026-06-03 Nav2 IntensityVoxelLayer 孤立噪声过滤器
 
 改动文件：

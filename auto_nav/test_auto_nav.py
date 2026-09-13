@@ -7,6 +7,8 @@ from auto_nav import (
     compute_straight_segment_plan,
     should_handoff_to_straight_calibration,
     transform_local_velocity_between_yaws,
+    tdt_astar,
+    tdt_simplify_path,
 )
 
 
@@ -19,6 +21,19 @@ WAYPOINTS = [
 
 
 class StraightCalibrationHandoffTest(unittest.TestCase):
+    def test_tdt_astar_finds_path_around_obstacle(self):
+        grid = [[0] * 5 for _ in range(5)]
+        for y in range(4):
+            grid[y][2] = 253
+        path = tdt_astar(grid, (0, 0), (4, 4))
+        self.assertTrue(path)
+        self.assertEqual(path[0], (0, 0))
+        self.assertEqual(path[-1], (4, 4))
+
+    def test_tdt_simplify_path_keeps_endpoints(self):
+        path = [(0.0, 0.0), (0.5, 0.01), (1.0, 0.0)]
+        self.assertEqual(tdt_simplify_path(path, 0.1), [path[0], path[-1]])
+
     def test_default_manual_velocity_topic_matches_final_cmd_vel_frame(self):
         params = signature(AutoNavNode.__init__).parameters
 
