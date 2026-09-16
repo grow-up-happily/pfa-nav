@@ -31,6 +31,7 @@ def generate_launch_description():
     # Create the launch configuration variables
     namespace = LaunchConfiguration("namespace")
     rviz_config_file = LaunchConfiguration("rviz_config")
+    fixed_frame = LaunchConfiguration("fixed_frame")
 
     # Declare the launch arguments
     declare_namespace_cmd = DeclareLaunchArgument(
@@ -48,12 +49,18 @@ def generate_launch_description():
         description="Full path to the RViz config file to use",
     )
 
+    declare_fixed_frame_cmd = DeclareLaunchArgument(
+        "fixed_frame",
+        default_value="map",
+        description="RViz fixed frame (for example map or odom)",
+    )
+
     # Launch rviz
     start_rviz_cmd = Node(
         package="rviz2",
         executable="rviz2",
         namespace=namespace,
-        arguments=["-d", rviz_config_file],
+        arguments=["-d", rviz_config_file, "-f", fixed_frame],
         output="screen",
         remappings=[
             ("/tf", "tf"),
@@ -74,6 +81,7 @@ def generate_launch_description():
     # Declare the launch options
     ld.add_action(declare_namespace_cmd)
     ld.add_action(declare_rviz_config_file_cmd)
+    ld.add_action(declare_fixed_frame_cmd)
 
     # Add any conditioned actions
     ld.add_action(start_rviz_cmd)

@@ -20,7 +20,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, TextSubstitution
+from launch.substitutions import LaunchConfiguration, PythonExpression, TextSubstitution
 from launch_ros.actions import Node
 from launch_ros.descriptions import ParameterFile
 from nav2_common.launch import RewrittenYaml
@@ -56,6 +56,7 @@ def generate_launch_description():
     use_composition = LaunchConfiguration("use_composition")
     use_respawn = LaunchConfiguration("use_respawn")
     rviz_config_file = LaunchConfiguration("rviz_config_file")
+    rviz_fixed_frame = LaunchConfiguration("rviz_fixed_frame")
     use_rviz = LaunchConfiguration("use_rviz")
     log_level = LaunchConfiguration("log_level")
     auto_save_map = LaunchConfiguration("auto_save_map")
@@ -153,6 +154,14 @@ def generate_launch_description():
         description="Full path to the RVIZ config file to use",
     )
 
+    declare_rviz_fixed_frame_cmd = DeclareLaunchArgument(
+        "rviz_fixed_frame",
+        default_value=PythonExpression(
+            ["'odom' if '", slam, "'.lower() == 'true' else 'map'"]
+        ),
+        description="RViz fixed frame; defaults to odom for SLAM and map otherwise",
+    )
+
     declare_use_rviz_cmd = DeclareLaunchArgument(
         "use_rviz", default_value="True", description="Whether to start RVIZ"
     )
@@ -220,6 +229,7 @@ def generate_launch_description():
             "namespace": namespace,
             "use_sim_time": use_sim_time,
             "rviz_config": rviz_config_file,
+            "fixed_frame": rviz_fixed_frame,
         }.items(),
     )
 
@@ -268,6 +278,7 @@ def generate_launch_description():
     ld.add_action(declare_autostart_cmd)
     ld.add_action(declare_use_composition_cmd)
     ld.add_action(declare_rviz_config_file_cmd)
+    ld.add_action(declare_rviz_fixed_frame_cmd)
     ld.add_action(declare_use_rviz_cmd)
     ld.add_action(declare_use_respawn_cmd)
     ld.add_action(declare_log_level_cmd)
