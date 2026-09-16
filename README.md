@@ -67,6 +67,50 @@ ros2 run nav2_map_server map_saver_cli -f <YOUR_MAP_NAME> --ros-args -r __ns:=/r
 ros2 launch pb2025_nav_bringup rm_navigation_reality_launch.py slam:=True use_robot_state_pub:=True
 ```
 
+### 实车边建图边导航一键启动
+
+打开实车在线建图、Nav2、RViz 和目标管理小工具：
+
+```bash
+./auto_nav/start_reality_online_slam_nav.sh
+```
+
+使用已经保存的实车目标点自动导航（目标文件位于 `online_slam_goals/reality/`）：
+
+```bash
+./auto_nav/start_reality_online_slam_nav.sh --goal <实车目标名称>
+```
+
+正式比赛模式默认启用启动门控：即使地图、TF 和 Nav2 已准备完成，也必须收到 `/referee/game_status` 的 `pb_rm_interfaces/msg/GameStatus` 消息，且 `game_progress=RUNNING(4)` 后才发送目标。实际裁判话题名称不同时，使用 `--game-status-topic <话题>` 指定。
+
+实车调试时必须显式增加 `--test-mode`。小窗口会再次要求安全确认，确认后不等待裁判系统信号：
+
+```bash
+./auto_nav/start_reality_online_slam_nav.sh --test-mode --goal <实车目标名称>
+```
+
+小工具支持将多个已录制单点可视化排序并保存为 `pfa_online_slam_route/v1` 顺序路线。路线文件保存在对应环境的 `routes/` 子目录。实车测试执行路线：
+
+```bash
+./auto_nav/start_reality_online_slam_nav.sh --test-mode --route <实车路线名称>
+```
+
+正式比赛执行路线时去掉 `--test-mode`，整条路线会等待比赛 `RUNNING` 信号后才开始：
+
+```bash
+./auto_nav/start_reality_online_slam_nav.sh --route <实车路线名称>
+```
+
+查看可用目标名称：
+
+```bash
+./auto_nav/start_reality_online_slam_nav.sh --list-goals
+```
+
+脚本的实车默认值为空命名空间、`use_sim_time=False`，在线建图时 RViz Fixed Frame 自动使用 `odom`。如果完整机器人系统已经在发布关节 TF，请增加 `--no-robot-state-publisher`，避免重复发布 TF。
+
+在线建图目标按环境分开保存：仿真目标位于 `online_slam_goals/simulation/`，实车目标位于 `online_slam_goals/reality/`。这些路径均相对于项目根目录，不依赖电脑用户名或仓库的安装位置。
+
 开机后旁路录制 MID360 建图输入的脚本、systemd 安装脚本和用法说明都集中在 `autostart_mid360_record/`，详见 `autostart_mid360_record/README.md`。
 
 离线重跑录制包来建图时，不要再启动真实 Livox driver：

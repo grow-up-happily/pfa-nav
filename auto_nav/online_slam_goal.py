@@ -12,9 +12,11 @@ import math
 from pathlib import Path
 
 import rclpy
+from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import PointStamped, PoseStamped
 from nav2_msgs.action import NavigateToPose
 from nav_msgs.msg import OccupancyGrid
+from pb_rm_interfaces.msg import GameStatus
 from rclpy.action import ActionClient
 from rclpy.duration import Duration
 from rclpy.executors import ExternalShutdownException
@@ -23,8 +25,47 @@ from rclpy.time import Time
 from tf2_ros import Buffer, TransformException, TransformListener
 
 
+ROUTE_FORMAT = "pfa_online_slam_route/v1"
+
+
 def quaternion_from_yaw(yaw):
     return 0.0, 0.0, math.sin(yaw * 0.5), math.cos(yaw * 0.5)
+
+
+def parse_route_data(data):
+    """Validate and normalize the portable online-SLAM route format."""
+    if not isinstance(data, dict) or data.get("format") != ROUTE_FORMAT:
+        raise ValueError(f"路线 format 必须是 {ROUTE_FORMAT}")
+    frame = data.get("frame")
+    if frame not in ("map", "odom"):
+        raise ValueError("路线 frame 必须是 map 或 odom")
+    raw_waypoints = data.get("waypoints")
+    if not isinstance(raw_waypoints, list) or not raw_waypoints:
+        raise ValueError("路线 waypoints 必须是非空数组")
+
+    waypoints = []
+    for index, waypoint in enumerate(raw_waypoints, start=1):
+        if not isinstance(waypoint, dict) or not all(
+            key in waypoint for key in ("x", "y")
+        ):
+            raise ValueError(f"路线第 {index} 个点必须包含 x 和 y")
+        try:
+            x = float(waypoint["x"])
+            y = float(waypoint["y"])
+            yaw = float(waypoint.get("yaw", 0.0))
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"路线第 {index} 个点坐标不是有效数字") from exc
+        if not all(math.isfinite(value) for value in (x, y, yaw)):
+            raise ValueError(f"路线第 {index} 个点坐标必须是有限数字")
+        waypoints.append(
+            {
+                "name": str(waypoint.get("name") or f"waypoint_{index}"),
+                "x": x,
+                "y": y,
+                "yaw": yaw,
+            }
+        )
+    return frame, waypoints
 
 
 class OnlineSlamGoal(Node):
@@ -39,6 +80,10 @@ class OnlineSlamGoal(Node):
         click_topic=None,
         goal_file=None,
         save_goal=True,
+        start_mode="immediate",
+        game_status_topic="/referee/game_status",
+        route_waypoints=None,
+        record_only=False,
     ):
         super().__init__("online_slam_goal")
         self.goal_x = None if x is None else float(x)
@@ -47,6 +92,19 @@ class OnlineSlamGoal(Node):
         self.goal_frame = goal_frame
         self.goal_file = Path(goal_file).expanduser() if goal_file else None
         self.save_goal = bool(save_goal)
+        self.start_mode = start_mode
+        self.start_allowed = start_mode == "immediate"
+        self.game_status_topic = game_status_topic
+        self.route_waypoints = list(route_waypoints or [])
+        self.route_index = 0
+        self.record_only = bool(record_only)
+        self.current_goal_name = None
+        if self.route_waypoints:
+            first = self.route_waypoints[0]
+            self.goal_x = first["x"]
+            self.goal_y = first["y"]
+            self.goal_yaw = first["yaw"]
+            self.current_goal_name = first["name"]
         self.map_frame = map_frame
         self.base_frame = base_frame
         self.latest_map = None
@@ -57,6 +115,20 @@ class OnlineSlamGoal(Node):
         self.map_sub = self.create_subscription(
             OccupancyGrid, "map", self.map_callback, 10
         )
+        self.game_status_sub = None
+        if self.start_mode == "referee":
+            self.game_status_sub = self.create_subscription(
+                GameStatus,
+                self.game_status_topic,
+                self.game_status_callback,
+                10,
+            )
+            self.get_logger().warn(
+                f"比赛启动门控已启用：等待 {self.game_status_topic} "
+                "的 game_progress=RUNNING(4)，收到前绝不发送导航目标"
+            )
+        else:
+            self.get_logger().warn("立即出发模式已启用，不等待比赛开始信号")
         self.click_sub = None
         if click_topic:
             self.click_sub = self.create_subscription(
@@ -70,6 +142,11 @@ class OnlineSlamGoal(Node):
             self.get_logger().info(
                 f"等待 RViz 点击目标 ({click_topic})，点击点坐标将按 {self.goal_frame} 解释"
             )
+        elif self.route_waypoints:
+            self.get_logger().info(
+                f"已加载顺序路线，共 {len(self.route_waypoints)} 个点；"
+                f"当前等待第 1 个点: {self.current_goal_name}"
+            )
         else:
             self.get_logger().info(
                 f"已缓存目标点: ({self.goal_x:.3f}, {self.goal_y:.3f}) "
@@ -79,6 +156,13 @@ class OnlineSlamGoal(Node):
 
     def map_callback(self, msg):
         self.latest_map = msg
+
+    def game_status_callback(self, msg):
+        if self.start_allowed:
+            return
+        if msg.game_progress == GameStatus.RUNNING:
+            self.start_allowed = True
+            self.get_logger().warn("已收到比赛 RUNNING 状态，导航目标允许发送")
 
     def click_callback(self, msg):
         if self.goal_x is not None and self.goal_y is not None:
@@ -96,6 +180,9 @@ class OnlineSlamGoal(Node):
         )
         if self.save_goal and self.goal_file is not None:
             self.save_goal_file()
+        if self.record_only:
+            self.get_logger().info("仅录点模式完成，不发送导航目标")
+            self.finished = True
 
     def save_goal_file(self):
         data = {
@@ -192,6 +279,12 @@ class OnlineSlamGoal(Node):
             if int(elapsed) % 5 == 0:
                 self.get_logger().info("等待 navigate_to_pose action server...")
             return
+        if not self.start_allowed:
+            if int(elapsed) % 5 == 0:
+                self.get_logger().info(
+                    f"导航系统已就绪，仍在等待比赛开始信号: {self.game_status_topic}"
+                )
+            return
 
         goal = NavigateToPose.Goal()
         goal.pose = PoseStamped()
@@ -207,13 +300,24 @@ class OnlineSlamGoal(Node):
         goal.pose.pose.orientation.w = qw
 
         self.goal_sent = True
-        self.get_logger().info("地图、TF 和 action 已就绪，发送 NavigateToPose 目标")
+        if self.route_waypoints:
+            progress = f"[{self.route_index + 1}/{len(self.route_waypoints)}] "
+            target_name = self.current_goal_name
+        else:
+            progress = ""
+            target_name = "单点目标"
+        self.get_logger().info(
+            f"地图、TF 和 action 已就绪，发送 {progress}{target_name}"
+        )
         future = self.nav_client.send_goal_async(goal, feedback_callback=self.feedback_callback)
         future.add_done_callback(self.goal_response_callback)
 
     def feedback_callback(self, feedback_msg):
         distance = feedback_msg.feedback.distance_remaining
-        self.get_logger().info(f"目标剩余距离: {distance:.3f} m")
+        prefix = ""
+        if self.route_waypoints:
+            prefix = f"路线点 {self.route_index + 1}/{len(self.route_waypoints)} "
+        self.get_logger().info(f"{prefix}目标剩余距离: {distance:.3f} m")
 
     def goal_response_callback(self, future):
         try:
@@ -236,6 +340,34 @@ class OnlineSlamGoal(Node):
             self.get_logger().info(f"导航结束，状态码: {wrapped.status}")
         except Exception as exc:
             self.get_logger().error(f"读取导航结果失败: {exc}")
+            self.finished = True
+            return
+
+        if (
+            wrapped.status == GoalStatus.STATUS_SUCCEEDED
+            and self.route_waypoints
+            and self.route_index + 1 < len(self.route_waypoints)
+        ):
+            self.route_index += 1
+            waypoint = self.route_waypoints[self.route_index]
+            self.goal_x = waypoint["x"]
+            self.goal_y = waypoint["y"]
+            self.goal_yaw = waypoint["yaw"]
+            self.current_goal_name = waypoint["name"]
+            self.goal_sent = False
+            self.start_time = self.get_clock().now()
+            self.get_logger().info(
+                f"切换到路线点 {self.route_index + 1}/{len(self.route_waypoints)}: "
+                f"{self.current_goal_name}；若尚未进入地图范围则继续等待地图扩展"
+            )
+            return
+
+        if self.route_waypoints and wrapped.status == GoalStatus.STATUS_SUCCEEDED:
+            self.get_logger().info("顺序巡航路线已全部完成")
+        elif self.route_waypoints:
+            self.get_logger().error(
+                f"路线在第 {self.route_index + 1} 个点停止，不会跳过失败点"
+            )
         self.finished = True
 
 
@@ -273,14 +405,44 @@ def main():
         help="从 --goal-file 自动加载目标，不需要 RViz 点击",
     )
     parser.add_argument(
+        "--route-file",
+        default="online_slam_route.json",
+        help="顺序路线 JSON 文件",
+    )
+    parser.add_argument(
+        "--use-saved-route",
+        action="store_true",
+        help="从 --route-file 加载路线，并按顺序逐点导航",
+    )
+    parser.add_argument(
+        "--record-only",
+        action="store_true",
+        help="记录 RViz 点击并保存后退出，不发送导航目标",
+    )
+    parser.add_argument(
         "--no-save",
         action="store_true",
         help="--wait-click 模式下不保存本次点击目标",
     )
     parser.add_argument("--map-frame", default="map")
     parser.add_argument("--base-frame", default="gimbal_yaw")
+    parser.add_argument(
+        "--start-mode",
+        choices=("immediate", "referee"),
+        default="immediate",
+        help="immediate 立即允许发目标；referee 等待比赛状态 RUNNING",
+    )
+    parser.add_argument(
+        "--game-status-topic",
+        default="/referee/game_status",
+        help="比赛状态话题，消息类型为 pb_rm_interfaces/msg/GameStatus",
+    )
     args, ros_args = parser.parse_known_args()
+    if args.use_saved_goal and args.use_saved_route:
+        parser.error("--use-saved-goal 和 --use-saved-route 不能同时使用")
+
     saved_goal = None
+    route_waypoints = None
     if args.use_saved_goal:
         try:
             saved_goal = json.loads(
@@ -297,13 +459,30 @@ def main():
         args.yaw = float(saved_goal.get("yaw", 0.0))
         args.goal_frame = saved_goal["frame"]
         args.wait_click = False
+    elif args.use_saved_route:
+        try:
+            route_data = json.loads(
+                Path(args.route_file).expanduser().read_text(encoding="utf-8")
+            )
+            args.goal_frame, route_waypoints = parse_route_data(route_data)
+        except (OSError, json.JSONDecodeError, ValueError) as exc:
+            parser.error(f"读取路线文件失败 {args.route_file}: {exc}")
+        first = route_waypoints[0]
+        args.x = first["x"]
+        args.y = first["y"]
+        args.yaw = first["yaw"]
+        args.wait_click = False
     if args.wait_click:
         if args.x is not None or args.y is not None:
             parser.error("--wait-click 不能与 --x/--y 同时使用")
         if args.goal_frame != "odom":
             parser.error("--wait-click 模式请使用 --goal-frame odom，并将 RViz Fixed Frame 设为 odom")
+        if args.record_only and args.no_save:
+            parser.error("--record-only 不能与 --no-save 同时使用")
     elif args.x is None or args.y is None:
         parser.error("必须同时指定 --x/--y，或使用 --wait-click")
+    elif args.record_only:
+        parser.error("--record-only 只能与 --wait-click 一起使用")
 
     rclpy.init(args=ros_args)
     node = OnlineSlamGoal(
@@ -316,6 +495,10 @@ def main():
         click_topic=args.click_topic if args.wait_click else None,
         goal_file=args.goal_file,
         save_goal=not args.no_save,
+        start_mode=args.start_mode,
+        game_status_topic=args.game_status_topic,
+        route_waypoints=route_waypoints,
+        record_only=args.record_only,
     )
     try:
         while rclpy.ok() and not node.finished:
