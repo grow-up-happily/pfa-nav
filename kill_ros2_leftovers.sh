@@ -72,6 +72,29 @@ done
 SCRIPT_PID=$$
 SCRIPT_NAME=$(basename "$0")
 WORKSPACE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+PRESERVED_RECORDER="${WORKSPACE_DIR}/autostart_mid360_record/mid360_mapping_record.sh"
+
+is_preserved_recorder_process() {
+  local pid="$1"
+  local current="$pid"
+  local cmdline ppid
+
+  # Preserve the boot-time MID360 recorder and every child it owns (including
+  # ros2 bag). It is an intentional passive service, not a ROS test leftover.
+  while [[ "$current" =~ ^[0-9]+$ && "$current" -gt 1 ]]; do
+    if [[ -r "/proc/$current/cmdline" ]]; then
+      cmdline=$(tr '\0' ' ' < "/proc/$current/cmdline")
+      [[ "$cmdline" == *"$PRESERVED_RECORDER"* ]] && return 0
+    fi
+
+    [[ -r "/proc/$current/stat" ]] || break
+    ppid=$(awk '{print $4}' "/proc/$current/stat" 2>/dev/null || true)
+    [[ -n "$ppid" && "$ppid" != "$current" ]] || break
+    current="$ppid"
+  done
+
+  return 1
+}
 
 source_if_exists() {
   local setup_file="$1"
@@ -197,6 +220,10 @@ fi
 while read -r pid proc_user comm args; do
   [[ -z "${pid:-}" || -z "${comm:-}" ]] && continue
   args="${args:-}"
+
+  if [[ "$args" == *"$PRESERVED_RECORDER"* ]] || is_preserved_recorder_process "$pid"; then
+    continue
+  fi
 
   if match_known_ros_command "$comm" "$args" || match_ros_graph_node "$comm" "$args"; then
     add_pid "$pid" "$args"

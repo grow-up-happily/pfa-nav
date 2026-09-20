@@ -1,0 +1,22 @@
+[Unit]
+Description=PFA real-robot localization and Nav2 stack
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+WorkingDirectory=__WORKSPACE__
+Environment=WORKSPACE=__WORKSPACE__
+Environment=ROS_LOG_DIR=__WORKSPACE__/log/ros
+Environment=NAMESPACE=
+Environment=USE_RVIZ=False
+EnvironmentFile=-/etc/default/pfa-navigation
+ExecStart=__WORKSPACE__/autostart_navigation/start_navigation.sh
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=45
+
+[Install]
+WantedBy=multi-user.target

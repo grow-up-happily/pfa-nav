@@ -273,8 +273,7 @@ int main(int argc, char **argv) {
   downSizeFilter.setLeafSize(scanVoxelSize, scanVoxelSize, scanVoxelSize);
 
   rclcpp::Rate rate(100);
-  bool status = rclcpp::ok();
-  while (status) {
+  while (rclcpp::ok()) {
     rclcpp::spin_some(nh);
     if (newlaserCloud) {
       newlaserCloud = false;
@@ -687,8 +686,6 @@ int main(int argc, char **argv) {
       pubLaserCloud->publish(terrainCloud2);
     }
 
-    // status = ros::ok();
-    status = rclcpp::ok();
     rate.sleep();
   }
 

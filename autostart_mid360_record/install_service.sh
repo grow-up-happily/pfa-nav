@@ -11,6 +11,7 @@ SERVICE_NAME="${SERVICE_NAME:-mid360_mapping_record.service}"
 SERVICE_PATH="/etc/systemd/system/$SERVICE_NAME"
 RECORD_MODE="${RECORD_MODE:-debug}"
 SERVICE_USER="${SERVICE_USER:-$(id -un)}"
+START_NOW="${START_NOW:-0}"
 
 if [[ ! -x "$SCRIPT_DIR/mid360_mapping_record.sh" ]]; then
   chmod +x "$SCRIPT_DIR/mid360_mapping_record.sh"
@@ -48,11 +49,16 @@ echo "[install_mid360_record] service user: $SERVICE_USER"
 echo "[install_mid360_record] record mode: $RECORD_MODE"
 echo "[install_mid360_record] installing: $SERVICE_PATH"
 
-sudo cp "$tmp_service" "$SERVICE_PATH"
+sudo install -m 0644 "$tmp_service" "$SERVICE_PATH"
 sudo systemctl daemon-reload
-sudo systemctl enable --now "$SERVICE_NAME"
+sudo systemctl enable "$SERVICE_NAME"
 
-echo "[install_mid360_record] installed and started."
+if [[ "$START_NOW" == "1" ]]; then
+  sudo systemctl restart "$SERVICE_NAME"
+  echo "[install_mid360_record] installed, enabled, and started."
+else
+  echo "[install_mid360_record] installed and enabled; it will start on next boot."
+fi
 echo "[install_mid360_record] check status:"
 echo "  systemctl status $SERVICE_NAME"
 echo "  journalctl -u $SERVICE_NAME -f"

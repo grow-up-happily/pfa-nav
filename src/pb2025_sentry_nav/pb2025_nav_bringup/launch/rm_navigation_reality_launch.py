@@ -17,13 +17,30 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import (
+    DeclareLaunchArgument,
+    IncludeLaunchDescription,
+    SetEnvironmentVariable,
+)
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PythonExpression, TextSubstitution
 from launch_ros.actions import Node
 from launch_ros.descriptions import ParameterFile
 from nav2_common.launch import RewrittenYaml
+
+
+def _navigation_ld_library_path():
+    """Remove MVS' incompatible libusb from navigation child processes."""
+    mvs_library_dirs = {
+        "/opt/MVS/lib",
+        "/opt/MVS/lib/32",
+        "/opt/MVS/lib/64",
+    }
+    entries = os.environ.get("LD_LIBRARY_PATH", "").split(os.pathsep)
+    return os.pathsep.join(
+        entry for entry in entries if entry and os.path.normpath(entry) not in mvs_library_dirs
+    )
 
 
 def _src_bringup_dir(bringup_dir):
@@ -208,6 +225,10 @@ def generate_launch_description():
         allow_substs=True,
     )
 
+    navigation_ld_library_path_envvar = SetEnvironmentVariable(
+        "LD_LIBRARY_PATH", _navigation_ld_library_path()
+    )
+
     start_robot_state_publisher_cmd = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(launch_dir, "robot_state_publisher_launch.py")
@@ -271,6 +292,9 @@ def generate_launch_description():
     )
 
     ld = LaunchDescription()
+
+    # PCL must resolve the system libusb, not the older copy bundled by MVS.
+    ld.add_action(navigation_ld_library_path_envvar)
 
     # Declare the launch options
     ld.add_action(declare_namespace_cmd)

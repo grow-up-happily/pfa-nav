@@ -16,7 +16,6 @@ from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import PointStamped, PoseStamped
 from nav2_msgs.action import NavigateToPose
 from nav_msgs.msg import OccupancyGrid
-from pb_rm_interfaces.msg import GameStatus
 from rclpy.action import ActionClient
 from rclpy.duration import Duration
 from rclpy.executors import ExternalShutdownException
@@ -116,7 +115,17 @@ class OnlineSlamGoal(Node):
             OccupancyGrid, "map", self.map_callback, 10
         )
         self.game_status_sub = None
+        self.game_status_type = None
         if self.start_mode == "referee":
+            try:
+                from pb_rm_interfaces.msg import GameStatus
+            except ModuleNotFoundError as exc:
+                raise RuntimeError(
+                    "正式比赛模式需要 pb_rm_interfaces；请先执行 "
+                    "source /opt/ros/humble/setup.bash && "
+                    "source install/setup.bash"
+                ) from exc
+            self.game_status_type = GameStatus
             self.game_status_sub = self.create_subscription(
                 GameStatus,
                 self.game_status_topic,
@@ -160,7 +169,7 @@ class OnlineSlamGoal(Node):
     def game_status_callback(self, msg):
         if self.start_allowed:
             return
-        if msg.game_progress == GameStatus.RUNNING:
+        if msg.game_progress == self.game_status_type.RUNNING:
             self.start_allowed = True
             self.get_logger().warn("已收到比赛 RUNNING 状态，导航目标允许发送")
 

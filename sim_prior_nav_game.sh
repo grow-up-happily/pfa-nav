@@ -29,6 +29,26 @@ die() {
   exit 1
 }
 
+stop_process_group() {
+  local label="$1"
+  local leader_pid="$2"
+  local signal attempt
+
+  [[ -n "$leader_pid" ]] || return 0
+  kill -0 -- "-$leader_pid" 2>/dev/null || return 0
+
+  for signal in INT TERM KILL; do
+    log "Stopping $label with SIG$signal..."
+    kill -"$signal" -- "-$leader_pid" 2>/dev/null || true
+    for attempt in {1..20}; do
+      kill -0 -- "-$leader_pid" 2>/dev/null || break 2
+      sleep 0.25
+    done
+  done
+
+  wait "$leader_pid" 2>/dev/null || true
+}
+
 source_ros() {
   if [[ -f "$SCRIPT_DIR/install/setup.bash" ]]; then
     set +u
@@ -52,18 +72,8 @@ source_ros() {
 
 cleanup() {
   trap - INT TERM EXIT
-
-  if [[ -n "${nav_pid:-}" ]] && kill -0 "$nav_pid" 2>/dev/null; then
-    log "Stopping prior navigation launch..."
-    kill -INT "-$nav_pid" 2>/dev/null || true
-    wait "$nav_pid" 2>/dev/null || true
-  fi
-
-  if [[ -n "${gazebo_pid:-}" ]] && kill -0 "$gazebo_pid" 2>/dev/null; then
-    log "Stopping Gazebo launch..."
-    kill -INT "-$gazebo_pid" 2>/dev/null || true
-    wait "$gazebo_pid" 2>/dev/null || true
-  fi
+  stop_process_group "prior navigation launch" "${nav_pid:-}"
+  stop_process_group "Gazebo launch" "${gazebo_pid:-}"
 }
 
 source_ros

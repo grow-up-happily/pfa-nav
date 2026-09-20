@@ -54,6 +54,10 @@ def generate_launch_description():
             "gz_version": "6",
             "gz_args": [
                 world_sdf_path,
+                # Keep the world paused while the robot is inserted. Gazebo 6
+                # may crash in its sensor render thread when a visual model is
+                # dynamically inserted into an already-running world. The
+                # spawn launch unpauses the world after insertion completes.
                 TextSubstitution(text=" --gui-config "),
                 ign_config_path,
             ],

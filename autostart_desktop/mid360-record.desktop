@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Exec=/home/pfa/sight/new/pfa-nav/autostart_mid360_record/mid360_mapping_record.sh
+Hidden=true
+NoDisplay=false
+X-GNOME-Autostart-enabled=false
+X-GNOME-Autostart-Delay=2
+Name=MID360 rosbag recorder (desktop fallback, disabled)
+Comment=Disabled because mid360_mapping_record.service owns boot startup

@@ -173,24 +173,15 @@ void LightBarController::PreUpdate(const ignition::gazebo::UpdateInfo &_info,
         if(this->dataPtr->isDone && this->dataPtr->change){
             auto targetMaterial = GetMaterial(this->dataPtr->targetState);
             for(auto &info: this->dataPtr->visualEntityInfos){
-                info.state = 0;
                 info.visualSdf.SetMaterial(targetMaterial);
+                _ecm.SetComponentData<components::Material>(info.entity, targetMaterial);
+                _ecm.SetChanged(
+                    info.entity,
+                    components::Material::typeId,
+                    ComponentState::OneTimeChange);
             }
-            this->dataPtr->change = false; 
-            this->dataPtr->isDone = false;
+            this->dataPtr->change = false;
         }
-    }
-    if(!this->dataPtr->isDone){
-        this->dataPtr->UpdateVisualEnitiies();
-        // check
-        bool flag = true;
-        for(auto &info: this->dataPtr->visualEntityInfos){
-            if(info.state<2){
-                flag = false;
-                break;
-            }
-        }
-        this->dataPtr->isDone = flag;
     }
 }
 

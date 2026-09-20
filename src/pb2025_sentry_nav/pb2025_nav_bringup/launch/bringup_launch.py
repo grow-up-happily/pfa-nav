@@ -34,6 +34,24 @@ from launch_ros.descriptions import ParameterFile
 from nav2_common.launch import ReplaceString, RewrittenYaml
 
 
+def _navigation_ld_library_path():
+    """Keep vendor camera libraries from overriding the system libusb.
+
+    The MVS SDK ships an old libusb-1.0.so.0 without libusb_set_option.  PCL's
+    libpcl_io requires that symbol, so Point-LIO exits with status 127 when the
+    MVS directories precede the system libraries in LD_LIBRARY_PATH.
+    """
+    mvs_library_dirs = {
+        "/opt/MVS/lib",
+        "/opt/MVS/lib/32",
+        "/opt/MVS/lib/64",
+    }
+    entries = os.environ.get("LD_LIBRARY_PATH", "").split(os.pathsep)
+    return os.pathsep.join(
+        entry for entry in entries if entry and os.path.normpath(entry) not in mvs_library_dirs
+    )
+
+
 def generate_launch_description():
     # Get the launch directory
     bringup_dir = get_package_share_directory("pb2025_nav_bringup")
@@ -91,6 +109,10 @@ def generate_launch_description():
     )
 
     colorized_output_envvar = SetEnvironmentVariable("RCUTILS_COLORIZED_OUTPUT", "1")
+
+    navigation_ld_library_path_envvar = SetEnvironmentVariable(
+        "LD_LIBRARY_PATH", _navigation_ld_library_path()
+    )
 
     declare_namespace_cmd = DeclareLaunchArgument(
         "namespace", default_value="", description="Top-level namespace"
@@ -261,6 +283,7 @@ def generate_launch_description():
     # Set environment variables
     ld.add_action(stdout_linebuf_envvar)
     ld.add_action(colorized_output_envvar)
+    ld.add_action(navigation_ld_library_path_envvar)
 
     # Declare the launch options
     ld.add_action(declare_namespace_cmd)

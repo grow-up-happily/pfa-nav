@@ -1,12 +1,14 @@
 import json
+import signal
 import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 from action_msgs.msg import GoalStatus
 from online_slam_goal import OnlineSlamGoal, ROUTE_FORMAT, parse_route_data
-from online_slam_goal_gui import build_route_payload
+from online_slam_goal_gui import GoalLauncher, build_route_payload
 
 
 class OnlineSlamRouteTest(unittest.TestCase):
@@ -75,6 +77,19 @@ class OnlineSlamRouteTest(unittest.TestCase):
         self.assertEqual((node.goal_x, node.goal_y, node.goal_yaw), (9.0, 3.0, 0.5))
         self.assertFalse(node.goal_sent)
         self.assertFalse(node.finished)
+
+    def test_gui_stop_child_interrupts_and_waits_for_ros_node(self):
+        child = Mock()
+        child.poll.return_value = None
+        launcher = GoalLauncher.__new__(GoalLauncher)
+        launcher.child = child
+
+        launcher.stop_child()
+
+        child.send_signal.assert_called_once_with(signal.SIGINT)
+        child.wait.assert_called_once_with(timeout=3)
+        child.terminate.assert_not_called()
+        self.assertIsNone(launcher.child)
 
 
 if __name__ == "__main__":

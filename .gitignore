@@ -6,6 +6,17 @@ log
 install
 ros2_bag/
 
+# ROS bag recordings
+*.db3
+*.mcap
+**/slam_bag_*/
+
+# Generated SLAM snapshots and TF inspection graphs
+**/auto_map_*.pgm
+**/auto_map_*.yaml
+frames_*.gv
+frames_*.pdf
+
 # ======================================
 # Python
 # ======================================

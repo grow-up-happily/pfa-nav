@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Exec=/usr/bin/env USE_RVIZ=True /home/pfa/sight/new/pfa-nav/nav.sh
+Hidden=true
+NoDisplay=false
+X-GNOME-Autostart-enabled=false
+X-GNOME-Autostart-Delay=8
+Name=PFA navigation (desktop fallback, disabled)
+Comment=Disabled because pfa-navigation.service owns boot startup

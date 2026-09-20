@@ -10,6 +10,7 @@ import json
 import math
 import os
 import re
+import signal
 import shutil
 import subprocess
 import sys
@@ -92,10 +93,12 @@ class GoalLauncher:
         self.child = None
         self.pending_file = None
         self.name_prompt_open = False
+        self.closing = False
 
         root.title("在线建图导航目标")
         root.geometry("620x410")
         root.resizable(False, False)
+        root.protocol("WM_DELETE_WINDOW", self.close)
 
         frame = ttk.Frame(root, padding=24)
         frame.pack(fill="both", expand=True)
@@ -179,6 +182,38 @@ class GoalLauncher:
         ]
         self.status.config(text="已启动 ROS 目标节点，请查看终端输出和 RViz。")
         self.child = subprocess.Popen(command, cwd=str(PROJECT_ROOT))
+
+    def stop_child(self):
+        child = self.child
+        self.child = None
+        if child is None or child.poll() is not None:
+            return
+
+        try:
+            child.send_signal(signal.SIGINT)
+        except ProcessLookupError:
+            child.wait()
+            return
+        try:
+            child.wait(timeout=3)
+            return
+        except subprocess.TimeoutExpired:
+            child.terminate()
+        try:
+            child.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            child.kill()
+            child.wait()
+
+    def close(self):
+        if self.closing:
+            return
+        self.closing = True
+        self.stop_child()
+        if self.pending_file is not None and self.pending_file.exists():
+            self.pending_file.unlink()
+        self.pending_file = None
+        self.root.destroy()
 
     def confirm_test_start(self):
         if not self.confirm_before_start:
@@ -623,7 +658,12 @@ def main():
         root.after(150, lambda: launcher.start_saved_goal_by_name(args.auto_goal))
     elif args.auto_route:
         root.after(150, lambda: launcher.start_saved_route_by_name(args.auto_route))
-    root.mainloop()
+    try:
+        root.mainloop()
+    except KeyboardInterrupt:
+        launcher.close()
+    finally:
+        launcher.stop_child()
 
 
 if __name__ == "__main__":

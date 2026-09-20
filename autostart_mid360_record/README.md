@@ -32,12 +32,18 @@ cd <你的pfa-nav仓库路径>
 ./autostart_mid360_record/install_service.sh
 ```
 
-安装脚本会自动把当前仓库路径写入 `/etc/systemd/system/mid360_mapping_record.service`。如果要指定模式：
+安装脚本会自动把当前仓库路径写入 `/etc/systemd/system/mid360_mapping_record.service`，并设为下次开机启动，但默认不会立即开始录包。如果要指定模式：
 
 ```bash
 RECORD_MODE=debug ./autostart_mid360_record/install_service.sh
 RECORD_MODE=minimal ./autostart_mid360_record/install_service.sh
 RECORD_MODE=full ./autostart_mid360_record/install_service.sh
+```
+
+如果确实要安装后立即启动：
+
+```bash
+START_NOW=1 ./autostart_mid360_record/install_service.sh
 ```
 
 ## 查看状态和日志

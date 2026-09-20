@@ -1,28 +1,49 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -Eeuo pipefail
 
-# 导航模式
+# Real-robot localization and navigation entry point. Resolve every path from
+# this repository so an older pfa-nav workspace can never be sourced silently.
+WORKSPACE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+SETUP_FILE="${SETUP_FILE:-$WORKSPACE/install/setup.bash}"
+MAP_FILE="${MAP_FILE:-$WORKSPACE/src/pb2025_sentry_nav/pb2025_nav_bringup/map/reality/game.yaml}"
+PCD_FILE="${PCD_FILE:-$WORKSPACE/src/pb2025_sentry_nav/point_lio/PCD/scans.pcd}"
+NAMESPACE="${NAMESPACE:-}"
+USE_RVIZ="${USE_RVIZ:-False}"
+ROS_LOG_DIR="${ROS_LOG_DIR:-$WORKSPACE/log/ros}"
 
-# 进入你的工作空间目录
-cd ~/sight/pfa-nav || exit
+for required in "$SETUP_FILE" "$MAP_FILE" "$PCD_FILE"; do
+  if [[ ! -f "$required" ]]; then
+    echo "ERROR: required navigation file is missing: $required" >&2
+    exit 1
+  fi
+done
 
-# Source 环境变量
-source install/setup.bash
+mkdir -p "$ROS_LOG_DIR"
+export ROS_LOG_DIR
 
-# 拷贝 pcd 文件
-cp src/pb2025_sentry_nav/point_lio/PCD/scans.pcd src/pb2025_sentry_nav/pb2025_nav_bringup/pcd/reality/game.pcd
-echo "✅ 已拷贝 scans.pcd 为 game.pcd"
+set +u
+# shellcheck source=/dev/null
+source /opt/ros/humble/setup.bash
+# shellcheck source=/dev/null
+source "$SETUP_FILE"
+set -u
 
-# 编译
-# colcon build --symlink-install --parallel-workers 2 --cmake-args -DCMAKE_BUILD_TYPE=Release
-if [ $? -ne 0 ]; then
-  echo "❌ 编译失败！退出"
-  exit 1
-fi
+cd "$WORKSPACE"
+echo "[pfa_navigation] workspace: $WORKSPACE"
+echo "[pfa_navigation] map: $MAP_FILE"
+echo "[pfa_navigation] point cloud: $PCD_FILE"
+echo "[pfa_navigation] namespace: ${NAMESPACE:-<empty>}"
+echo "[pfa_navigation] RViz: $USE_RVIZ"
 
-# 再 source 一次编译好的环境
-source install/setup.bash
-echo "✅ 环境已加载"
-
-# 启动导航
-ros2 launch pb2025_nav_bringup rm_navigation_reality_launch.py world:=game slam:=False use_robot_state_pub:=True
-
+exec ros2 launch pb2025_nav_bringup rm_navigation_reality_launch.py \
+  world:=game \
+  map:="$MAP_FILE" \
+  prior_pcd_file:="$PCD_FILE" \
+  namespace:="$NAMESPACE" \
+  slam:=False \
+  use_sim_time:=False \
+  use_robot_state_pub:=True \
+  use_livox_driver:=True \
+  use_rviz:="$USE_RVIZ" \
+  auto_save_map:=False \
+  auto_save_pcd:=False

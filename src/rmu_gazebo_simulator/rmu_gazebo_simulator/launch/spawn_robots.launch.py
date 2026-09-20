@@ -3,7 +3,14 @@ import os
 import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, ExecuteProcess, OpaqueFunction
+from launch.actions import (
+    DeclareLaunchArgument,
+    ExecuteProcess,
+    OpaqueFunction,
+    RegisterEventHandler,
+    TimerAction,
+)
+from launch.event_handlers import OnProcessExit
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from nav2_common.launch import ReplaceString
@@ -124,12 +131,43 @@ def launch_setup(context):
             output="screen",
         )
 
+        unpause_world = ExecuteProcess(
+            cmd=[
+                "ign",
+                "service",
+                "-s",
+                "/world/default/control",
+                "--reqtype",
+                "ignition.msgs.WorldControl",
+                "--reptype",
+                "ignition.msgs.Boolean",
+                "--timeout",
+                "2000",
+                "--req",
+                "pause: false",
+            ],
+            output="screen",
+        )
+
+        # Keep Gazebo paused until the complete model has reached the rendering
+        # scene. Inserting the robot while the sensor render thread is active can
+        # crash Gazebo 6 with a duplicate-visual error.
+        set_performer_after_spawn = RegisterEventHandler(
+            OnProcessExit(
+                target_action=spawn_robot,
+                on_exit=[
+                    set_performer_service,
+                    TimerAction(period=1.0, actions=[unpause_world]),
+                ],
+            )
+        )
+
         actions.extend([
             spawn_robot,
             robot_base,
             robot_state_publisher,
             robot_ign_bridge,
-            set_performer_service,
+            set_performer_after_spawn,
         ])
 
     return actions
