@@ -6,10 +6,21 @@ log
 install
 ros2_bag/
 
+# Local generated maps and point clouds. Keep only the checked-in documentation
+# and placeholder files in these runtime output directories.
+*.pcd
+src/pb2025_sentry_nav/point_lio/PCD/*
+!src/pb2025_sentry_nav/point_lio/PCD/readme.md
+src/pb2025_sentry_nav/pb2025_nav_bringup/pcd/reality/*
+!src/pb2025_sentry_nav/pb2025_nav_bringup/pcd/reality/reserve
+src/pb2025_sentry_nav/pb2025_nav_bringup/pcd/simulation/*
+
 # ROS bag recordings
 *.db3
 *.mcap
 **/slam_bag_*/
+**/*.bag
+**/*.bag.active
 
 # Generated SLAM snapshots and TF inspection graphs
 **/auto_map_*.pgm
@@ -31,3 +42,14 @@ __pycache__/
 *.egg-info/
 *.egg
 dist/
+.pytest_cache/
+.coverage
+coverage.xml
+
+# Editor and command failure leftovers
+*.swp
+*.swo
+*.tmp
+*.orig
+*.bak
+*.bak_*
