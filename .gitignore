@@ -6,14 +6,11 @@ log
 install
 ros2_bag/
 
-# Local generated maps and point clouds. Keep only the checked-in documentation
-# and placeholder files in these runtime output directories.
-*.pcd
-src/pb2025_sentry_nav/point_lio/PCD/*
-!src/pb2025_sentry_nav/point_lio/PCD/readme.md
-src/pb2025_sentry_nav/pb2025_nav_bringup/pcd/reality/*
-!src/pb2025_sentry_nav/pb2025_nav_bringup/pcd/reality/reserve
-src/pb2025_sentry_nav/pb2025_nav_bringup/pcd/simulation/*
+# Local generated point-cloud outputs. Named competition/prior maps such as
+# game.pcd remain trackable; only the default rolling scan outputs are ignored.
+src/pb2025_sentry_nav/point_lio/PCD/scans.pcd
+src/pb2025_sentry_nav/pb2025_nav_bringup/pcd/reality/scans.pcd
+src/pb2025_sentry_nav/pb2025_nav_bringup/pcd/simulation/scans.pcd
 
 # ROS bag recordings
 *.db3
